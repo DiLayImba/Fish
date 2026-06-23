@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>🎣 Рыбалка</title>
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: white;
+}
+#app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+#game {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  background: linear-gradient(180deg, #c0e4ff 0%, #5a9fc7 7%, #1e5f8c 22%, #0a3552 55%, #02192b 95%);
+  overflow: hidden;
+  box-shadow: 0 0 60px rgba(0,0,0,0.6);
+  touch-action: none;
+}
+#hud {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: max(10px, env(safe-area-inset-top, 0px)) 14px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+  pointer-events: none;
+}
+.hud-box {
+  background: rgba(0,0,0,0.5);
+  padding: 7px 13px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 13px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#controls {
+  position: absolute;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 22px;
+  z-index: 5;
+}
+.ctrl-btn {
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px solid rgba(255,255,255,0.45);
+  color: white;
+  font-size: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.ctrl-btn:active {
+  background: rgba(255,255,255,0.4);
+  transform: scale(0.94);
+}
+.ctrl-up {
+  width: 60px;
+  height: 60px;
+  font-size: 24px;
+  background: rgba(80, 200, 120, 0.28);
+  border-color: rgba(80, 200, 120, 0.65);
+}
+.ctrl-up:active { background: rgba(80, 200, 120, 0.55); }
+
+#storage-view {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #233344 0%, #14202c 100%);
+  display: none;
+  flex-direction: column;
+  padding: max(50px, env(safe-area-inset-top, 0px)) 14px max(14px, env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+}
+#storage-view.active { display: flex; }
+.storage-title {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+}
+.storage-subtitle {
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+.storage-subtitle b { color: #ffd86b; font-weight: 600; }
+#storage-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  gap: 3px;
+  background: #3a2a1c;
+  border: 4px solid #8b5e3c;
+  border-radius: 10px;
+  padding: 5px;
+  margin: 10px auto;
+  width: min(94%, 380px);
+  aspect-ratio: 1;
+  position: relative;
+  box-shadow: inset 0 4px 12px rgba(0,0,0,0.5);
+}
+.cell {
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  position: relative;
+}
+.cell.hint-valid { background: rgba(80, 220, 130, 0.5); box-shadow: inset 0 0 0 1px rgba(80,220,130,0.9); }
+.cell.hint-invalid { background: rgba(220, 80, 80, 0.45); box-shadow: inset 0 0 0 1px rgba(220,80,80,0.9); }
+
+.fish-piece {
+  position: absolute;
+  z-index: 5;
+  cursor: grab;
+  touch-action: none;
+  transition: filter 0.15s;
+}
+.fish-piece.dragging {
+  z-index: 100;
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.7));
+  opacity: 0.88;
+  cursor: grabbing;
+  transition: none;
+}
+.fish-piece > .fish-grid {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: 3px;
+}
+.fish-cell {
+  background: var(--fish-color);
+  border: 1px solid rgba(0,0,0,0.25);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -2px 4px rgba(0,0,0,0.2);
+}
+.fish-cell.empty {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.fish-cell .eye {
+  width: 6px; height: 6px;
+  background: white;
+  border-radius: 50%;
+  position: relative;
+}
+.fish-cell .eye::after {
+  content: '';
+  position: absolute;
+  width: 3px; height: 3px;
+  background: #111;
+  border-radius: 50%;
+  top: 1.5px; left: 1.5px;
+}
+
+#holding-area {
+  background: rgba(0,0,0,0.4);
+  border: 2px dashed rgba(255,255,255,0.4);
+  border-radius: 10px;
+  margin-top: auto;
+  margin-bottom: 10px;
+  padding: 16px 14px 14px;
+  min-height: 100px;
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-start;
+}
+#holding-area.hint-valid {
+  border-color: rgba(80, 220, 130, 0.9);
+  background: rgba(80, 220, 130, 0.18);
+}
+#holding-label {
+  position: absolute;
+  top: -10px; left: 14px;
+  background: #233344;
+  padding: 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  opacity: 0.75;
+}
+.holding-fish-wrap {
+  position: relative;
+  display: inline-block;
+}
+#controls-bottom {
+  text-align: center;
+}
+.btn-primary {
+  background: linear-gradient(180deg, #62c462, #2f8a30);
+  border: none;
+  padding: 14px 30px;
+  border-radius: 24px;
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+}
+.btn-primary:active { transform: translateY(1px); }
+.btn-primary.warn { background: linear-gradient(180deg, #e08a3a, #b25e0c); }
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  z-index: 50;
+  padding: 30px;
+  text-align: center;
+}
+#overlay.active { display: flex; }
+#overlay h1 { font-size: 28px; margin-bottom: 12px; }
+#overlay p { font-size: 15px; margin-bottom: 22px; opacity: 0.9; line-height: 1.5; }
+
+#start-screen {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, #07476f 0%, #021a2c 80%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  z-index: 60;
+  padding: 30px;
+  text-align: center;
+}
+#start-screen.hidden { display: none; }
+#start-screen h1 { font-size: 40px; margin-bottom: 8px; letter-spacing: 1px; }
+#start-screen .subtitle { font-size: 13px; opacity: 0.7; margin-bottom: 30px; }
+#start-screen p { font-size: 14px; opacity: 0.9; margin-bottom: 18px; line-height: 1.55; max-width: 320px; }
+#start-screen .fish-emoji { font-size: 64px; margin-bottom: 8px; }
+.rules {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 26px;
+  text-align: left;
+  max-width: 320px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.rules b { color: #ffd86b; }
+
+#message {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 26px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+  pointer-events: none;
+  z-index: 8;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.4s;
+}
+#message.show {
+  opacity: 1;
+  transform: translate(-50%, -60%);
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="game">
+    <div id="hud">
+      <div class="hud-box" id="hud-round">Раунд 1/5</div>
+      <div class="hud-box" id="hud-status">0м · опускаем</div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="message"></div>
+    <div id="controls">
+      <button class="ctrl-btn" id="btn-left">◀</button>
+      <button class="ctrl-btn ctrl-up" id="btn-up" title="Поднять без улова">↑</button>
+      <button class="ctrl-btn" id="btn-right">▶</button>
+    </div>
+
+    <div id="storage-view">
+      <div class="storage-title">Склад судна</div>
+      <div class="storage-subtitle">Тащите рыбу · <b>тап</b> по рыбе — поворот</div>
+      <div id="storage-grid"></div>
+      <div id="holding-area">
+        <span id="holding-label">Отпустить в море</span>
+      </div>
+      <div id="controls-bottom">
+        <button id="next-round-btn" class="btn-primary">Следующий раунд</button>
+      </div>
+    </div>
+
+    <div id="overlay">
+      <h1 id="overlay-title"></h1>
+      <p id="overlay-text"></p>
+      <button class="btn-primary" id="restart-btn">Играть снова</button>
+    </div>
+
+    <div id="start-screen">
+      <div class="fish-emoji">🎣</div>
+      <h1>Рыбалка</h1>
+      <div class="subtitle">прототип · 5 раундов</div>
+      <div class="rules">
+        <b>1.</b> Опускайте крючок (◀ ▶ или A/D), кнопка <b>↑</b> — поднять без улова.<br>
+        <b>2.</b> Глубина бесконечная — чем глубже, тем больше рыбы.<br>
+        <b>3.</b> Поймали — 10 секунд тащим: рыба дрыгается, навстречу прилетают другие. Уворачивайтесь.<br>
+        <b>4.</b> На складе 4×4: <b>тащите</b> в ячейки, <b>тапайте</b> для поворота.
+      </div>
+      <button class="btn-primary" id="start-btn">Начать ловлю</button>
+    </div>
+  </div>
+</div>
+<script>
+// =================== Game ===================
+const FISH_TYPES = [
+  // shallow / common
+  { id: 'sardine',  name: 'Сардина',  color: '#c8d5e6', shape: [[1,1]],              hp: 25,  wiggleAmp: 30, wiggleFreq: 0.10, minDepth: 0,   weight: 6.0 },
+  { id: 'mackerel', name: 'Скумбрия', color: '#7bc8ff', shape: [[1,1,1]],            hp: 45,  wiggleAmp: 45, wiggleFreq: 0.06, minDepth: 0,   weight: 5.0 },
+  { id: 'pike',     name: 'Щука',     color: '#6b9c46', shape: [[1],[1],[1]],        hp: 60,  wiggleAmp: 35, wiggleFreq: 0.09, minDepth: 5,   weight: 4.0 },
+  // mid
+  { id: 'crab',     name: 'Краб',     color: '#d65a31', shape: [[1,1],[1,0]],        hp: 55,  wiggleAmp: 25, wiggleFreq: 0.13, minDepth: 15,  weight: 3.5 },
+  { id: 'octopus',  name: 'Осьминог', color: '#a040a0', shape: [[1,1,1],[0,1,0]],    hp: 75,  wiggleAmp: 55, wiggleFreq: 0.07, minDepth: 30,  weight: 3.0 },
+  { id: 'tuna',     name: 'Тунец',    color: '#3d7fb8', shape: [[1,1],[1,1]],        hp: 90,  wiggleAmp: 50, wiggleFreq: 0.10, minDepth: 50,  weight: 2.5 },
+  { id: 'eel',      name: 'Угорь',    color: '#5a4a3a', shape: [[1],[1],[1],[1]],    hp: 70,  wiggleAmp: 75, wiggleFreq: 0.14, minDepth: 70,  weight: 2.0 },
+  // deep — rarer, bigger
+  { id: 'squid',    name: 'Кальмар',  color: '#d8567a', shape: [[1,1,1],[1,0,1]],    hp: 100, wiggleAmp: 65, wiggleFreq: 0.08, minDepth: 100, weight: 1.8 },
+  { id: 'shark',    name: 'Акула',    color: '#5d6e80', shape: [[1,1,1,1]],          hp: 140, wiggleAmp: 90, wiggleFreq: 0.05, minDepth: 140, weight: 1.2 },
+  { id: 'manta',    name: 'Манта',    color: '#384858', shape: [[1,1,1],[1,1,1]],    hp: 170, wiggleAmp: 75, wiggleFreq: 0.06, minDepth: 200, weight: 0.9 },
+  { id: 'angler',   name: 'Удильщик', color: '#2c1a3a', shape: [[1,1],[1,1],[0,1]],  hp: 130, wiggleAmp: 60, wiggleFreq: 0.11, minDepth: 260, weight: 0.7 },
+  { id: 'whale',    name: 'Кашалот',  color: '#2a3a4e', shape: [[1,1,1,1],[1,1,1,1]],hp: 260, wiggleAmp: 110,wiggleFreq: 0.04, minDepth: 350, weight: 0.5 },
+];
+
+const CELL_VISUAL_SIZE_STAGE1 = 18;
+const MAX_ROUNDS = 5;
+const WATER_SURFACE_FRAC = 0.13;
+const DESCENT_SPEED = 140;
+const RISE_SPEED = 100;
+const HOOK_SPEED = 230;
+const DEPTH_PX_PER_M = 20; // 20 px = 1 m
+const GRID_SIZE = 5;
+const GRID_CELLS = GRID_SIZE * GRID_SIZE;
+const HAUL_DURATION = 10; // seconds of "pulling up" mini-game after catch
+const HAUL_RISE_SPEED = 25; // px/s — hook visually drifts up during haul
+const OBSTACLE_MIN_INTERVAL = 0.30;
+const OBSTACLE_MAX_INTERVAL = 0.85;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let dpr = window.devicePixelRatio || 1;
+let W = 0, H = 0;
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  W = rect.width;
+  H = rect.height;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+
+let state = null;
+let lastTime = 0;
+
+function newGameState() {
+  return {
+    round: 1,
+    placedFish: {},
+    heldFishes: [],
+    nextFishId: 1,
+    stage: 'fishing',
+    paused: true,
+    hook: { x: 0, y: 0 },
+    hookBaseX: 0,
+    hookPhase: 'descending',
+    fishes: [],
+    caught: null,
+    bubbles: [],
+    cameraY: 0,
+    lowestSpawnedY: 0,
+    inputLeft: false,
+    inputRight: false,
+    flash: 0,
+    drag: null,
+    obstacles: [],
+    obstacleTimer: 0,
+    haulTimer: 0,
+  };
+}
+
+function surfaceWorldY() { return H * WATER_SURFACE_FRAC; }
+
+function initStage1() {
+  state.hook = { x: W / 2, y: surfaceWorldY() + 4 };
+  state.hookBaseX = W / 2;
+  state.hookPhase = 'descending';
+  state.caught = null;
+  state.fishes = [];
+  state.bubbles = [];
+  state.cameraY = 0;
+  state.lowestSpawnedY = surfaceWorldY() + 80;
+  state.flash = 0;
+  state.obstacles = [];
+  state.obstacleTimer = 0;
+  state.haulTimer = 0;
+  spawnAhead();
+  for (let i = 0; i < 22; i++) {
+    state.bubbles.push({
+      x: Math.random() * W,
+      y: state.cameraY + Math.random() * H + 30,
+      r: 1 + Math.random() * 2.5,
+      vy: -8 - Math.random() * 16,
+    });
+  }
+  updateHud();
+}
+
+function spawnAhead() {
+  while (state.lowestSpawnedY < state.cameraY + H + 300) {
+    state.lowestSpawnedY += 55 + Math.random() * 50;
+    const layerN = 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < layerN; i++) {
+      spawnFish(state.lowestSpawnedY + (Math.random() - 0.5) * 30);
+    }
+  }
+}
+
+function pickFishType(depthM) {
+  const eligible = FISH_TYPES.filter(t => (t.minDepth || 0) <= depthM);
+  // boost weight as we go deeper past each fish's minDepth — deep-only fish get common when way below their threshold
+  const weighted = eligible.map(t => ({
+    t,
+    w: t.weight * (1 + Math.max(0, depthM - (t.minDepth || 0)) * 0.004),
+  }));
+  const total = weighted.reduce((s, e) => s + e.w, 0);
+  let r = Math.random() * total;
+  for (const e of weighted) {
+    r -= e.w;
+    if (r <= 0) return e.t;
+  }
+  return weighted[weighted.length - 1].t;
+}
+
+function spawnFish(y) {
+  const depthM = Math.max(0, (y - surfaceWorldY()) / DEPTH_PX_PER_M);
+  const type = pickFishType(depthM);
+  const dir = Math.random() < 0.5 ? -1 : 1;
+  const fishW = type.shape[0].length * CELL_VISUAL_SIZE_STAGE1;
+  const fishH = type.shape.length * CELL_VISUAL_SIZE_STAGE1;
+  state.fishes.push({
+    type,
+    x: Math.random() * (W - fishW) + fishW / 2,
+    y, baseY: y,
+    bobPhase: Math.random() * Math.PI * 2,
+    dir,
+    speed: 18 + Math.random() * 26,
+    w: fishW, h: fishH,
+    alive: true,
+  });
+}
+
+function despawnFar() {
+  state.fishes = state.fishes.filter(f =>
+    f === state.caught || (f.alive && f.y > state.cameraY - 200)
+  );
+}
+
+function spawnObstacle() {
+  const depthM = Math.max(0, (state.hook.y - surfaceWorldY()) / DEPTH_PX_PER_M);
+  const type = pickFishType(depthM);
+  const fishW = type.shape[0].length * CELL_VISUAL_SIZE_STAGE1;
+  const fishH = type.shape.length * CELL_VISUAL_SIZE_STAGE1;
+  const fromLeft = Math.random() < 0.5;
+  const speed = 90 + Math.random() * 130;
+  // place mostly within the screen, offset relative to hook
+  const yOffsetFromHook = (Math.random() - 0.45) * H * 0.55;
+  state.obstacles.push({
+    type,
+    x: fromLeft ? -fishW : W + fishW,
+    yOffsetFromHook,
+    y: state.hook.y + yOffsetFromHook,
+    vx: fromLeft ? speed : -speed,
+    bobPhase: Math.random() * Math.PI * 2,
+    w: fishW, h: fishH,
+    dir: fromLeft ? 1 : -1,
+    alive: true,
+  });
+}
+
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+function loop(t) {
+  const dt = Math.min(0.05, (t - lastTime) / 1000 || 0);
+  lastTime = t;
+  if (state && !state.paused) {
+    update(dt);
+    render();
+  }
+  requestAnimationFrame(loop);
+}
+
+function updateHud() {
+  if (!state) return;
+  if (state.stage === 'fishing') {
+    const depth = Math.max(0, Math.floor((state.hook.y - surfaceWorldY()) / DEPTH_PX_PER_M));
+    let phase;
+    if (state.hookPhase === 'descending') phase = 'опускаем';
+    else if (state.hookPhase === 'hauling') phase = '🎣 тащим · ' + state.haulTimer.toFixed(1) + 'с';
+    else if (state.hookPhase === 'rising') phase = 'поднимаем';
+    else if (state.hookPhase === 'escaping') phase = 'сорвалась';
+    else phase = '';
+    document.getElementById('hud-status').textContent = depth + 'м · ' + phase;
+  } else {
+    document.getElementById('hud-status').textContent = 'разместите улов';
+  }
+}
+
+function update(dt) {
+  if (state.stage !== 'fishing') return;
+
+  for (const f of state.fishes) {
+    if (!f.alive || f === state.caught) continue;
+    f.x += f.dir * f.speed * dt;
+    if (f.x < f.w / 2) { f.x = f.w / 2; f.dir = 1; }
+    if (f.x > W - f.w / 2) { f.x = W - f.w / 2; f.dir = -1; }
+    f.bobPhase += dt * 2;
+    f.y = f.baseY + Math.sin(f.bobPhase) * 3;
+  }
+
+  for (const b of state.bubbles) {
+    b.y += b.vy * dt;
+    if (b.y < state.cameraY - 40) {
+      b.y = state.cameraY + H + Math.random() * 80;
+      b.x = Math.random() * W;
+    }
+  }
+
+  const horiz = (state.inputRight ? 1 : 0) - (state.inputLeft ? 1 : 0);
+
+  if (state.hookPhase === 'descending') {
+    state.hook.y += DESCENT_SPEED * dt;
+    state.hookBaseX += horiz * HOOK_SPEED * dt;
+    state.hookBaseX = clamp(state.hookBaseX, 16, W - 16);
+    state.hook.x = state.hookBaseX;
+
+    for (const f of state.fishes) {
+      if (!f.alive) continue;
+      if (Math.abs(f.x - state.hook.x) < f.w / 2 + 5 &&
+          Math.abs(f.y - state.hook.y) < f.h / 2 + 5) {
+        state.caught = f;
+        f.maxHp = f.type.hp;
+        f.curHp = f.type.hp;
+        f.wigglePhase = Math.random() * Math.PI * 2;
+        state.hookPhase = 'hauling';
+        state.haulTimer = HAUL_DURATION;
+        state.obstacleTimer = 0.5;
+        state.obstacles = [];
+        flashMessage('Клюнула: ' + f.type.name + '!', '#ffd86b');
+        break;
+      }
+    }
+  } else if (state.hookPhase === 'hauling') {
+    state.haulTimer -= dt;
+    // visual slow rise for feel; camera will follow
+    state.hook.y -= HAUL_RISE_SPEED * dt;
+
+    const f = state.caught;
+    f.wigglePhase += f.type.wiggleFreq * dt * 60;
+    const wiggle =
+      Math.sin(f.wigglePhase) * f.type.wiggleAmp +
+      Math.sin(f.wigglePhase * 2.7 + 1) * f.type.wiggleAmp * 0.25;
+
+    state.hookBaseX += horiz * HOOK_SPEED * dt;
+    const halfClamp = Math.max(20, f.type.wiggleAmp + 10);
+    state.hookBaseX = clamp(state.hookBaseX, halfClamp, W - halfClamp);
+    state.hook.x = state.hookBaseX + wiggle;
+    state.hook.x = clamp(state.hook.x, 10, W - 10);
+
+    f.x = state.hook.x;
+    f.y = state.hook.y + 14;
+
+    // spawn incoming obstacles
+    state.obstacleTimer -= dt;
+    if (state.obstacleTimer <= 0) {
+      spawnObstacle();
+      // intensity ramps as timer counts down — last seconds get busier
+      const ramp = 1 - (state.haulTimer / HAUL_DURATION) * 0.55;
+      state.obstacleTimer = (OBSTACLE_MIN_INTERVAL + Math.random() * (OBSTACLE_MAX_INTERVAL - OBSTACLE_MIN_INTERVAL)) / ramp;
+    }
+    // move obstacles; they stay locked relative to the hook so screen Y is stable
+    for (const o of state.obstacles) {
+      o.x += o.vx * dt;
+      o.bobPhase += dt * 3;
+      o.y = state.hook.y + o.yOffsetFromHook + Math.sin(o.bobPhase) * 3;
+    }
+    state.obstacles = state.obstacles.filter(o => o.x > -180 && o.x < W + 180);
+
+    // collisions with obstacles
+    for (const o of state.obstacles) {
+      if (Math.abs(o.x - f.x) < (o.w + f.w) / 2 - 4 &&
+          Math.abs(o.y - f.y) < (o.h + f.h) / 2 - 4) {
+        f.curHp -= 32 * dt;
+        state.flash = 0.35;
+      }
+    }
+
+    if (f.curHp <= 0) {
+      f.alive = false;
+      state.caught = null;
+      state.obstacles = [];
+      state.hookPhase = 'escaping';
+      flashMessage('Сорвалась!', '#ff6b6b');
+    } else if (state.haulTimer <= 0) {
+      flashMessage('Поймали ' + f.type.name + '!', '#7bd680');
+      state.obstacles = [];
+      startStage2(f.type);
+    }
+  } else if (state.hookPhase === 'rising') {
+    state.hook.y -= RISE_SPEED * dt;
+    state.hookBaseX += horiz * HOOK_SPEED * dt;
+    state.hookBaseX = clamp(state.hookBaseX, 16, W - 16);
+    state.hook.x = state.hookBaseX;
+    if (state.hook.y <= surfaceWorldY() + 2) {
+      state.hookPhase = 'descending';
+      state.hook.y = surfaceWorldY() + 4;
+    }
+  } else if (state.hookPhase === 'escaping') {
+    state.hook.y -= RISE_SPEED * 1.6 * dt;
+    if (state.hook.y <= surfaceWorldY() + 2) {
+      state.hookPhase = 'descending';
+      state.hook.y = surfaceWorldY() + 4;
+    }
+  }
+
+  // camera follows hook (keep hook around middle of screen when deep)
+  state.cameraY = Math.max(0, state.hook.y - H * 0.55);
+
+  spawnAhead();
+  despawnFar();
+
+  if (state.flash > 0) state.flash -= dt;
+  updateHud();
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  const surfaceWorld = surfaceWorldY();
+  const camY = state.cameraY;
+  const surfaceScreen = surfaceWorld - camY;
+
+  // depth markers (faint lines + labels every 20m)
+  ctx.textAlign = 'left';
+  ctx.font = '10px -apple-system, sans-serif';
+  for (let depth = 10; depth < 50000; depth += 10) {
+    const worldY = surfaceWorld + depth * DEPTH_PX_PER_M;
+    const sy = worldY - camY;
+    if (sy < -10) continue;
+    if (sy > H + 10) break;
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.fillRect(0, sy, 6, 1);
+    ctx.fillRect(W - 6, sy, 6, 1);
+    if (depth % 20 === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.fillText(depth + 'м', 9, sy - 3);
+    }
+  }
+
+  // sun rays anchored at surface
+  if (surfaceScreen > -200 && surfaceScreen < H) {
+    const rayGrad = ctx.createLinearGradient(0, surfaceScreen, 0, surfaceScreen + 500);
+    rayGrad.addColorStop(0, 'rgba(255,255,200,0.10)');
+    rayGrad.addColorStop(1, 'rgba(255,255,200,0)');
+    ctx.fillStyle = rayGrad;
+    for (let i = 0; i < 5; i++) {
+      const rx = W * (0.1 + 0.18 * i);
+      ctx.beginPath();
+      ctx.moveTo(rx, surfaceScreen);
+      ctx.lineTo(rx + 60, surfaceScreen + 500);
+      ctx.lineTo(rx - 60, surfaceScreen + 500);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // surface
+  if (surfaceScreen > -10 && surfaceScreen < H + 10) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 6) {
+      const wy = surfaceScreen + Math.sin(x * 0.08 + performance.now() * 0.002) * 2.5;
+      if (x === 0) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
+    }
+    ctx.stroke();
+  }
+
+  // boat
+  const boatW = 100, boatH = 24;
+  const boatX = W / 2 - boatW / 2;
+  const boatScreenY = surfaceScreen - boatH + 6;
+  if (boatScreenY > -40 && boatScreenY < H) {
+    ctx.fillStyle = '#8b5e3c';
+    ctx.beginPath();
+    ctx.moveTo(boatX, boatScreenY);
+    ctx.lineTo(boatX + boatW, boatScreenY);
+    ctx.lineTo(boatX + boatW - 14, boatScreenY + boatH);
+    ctx.lineTo(boatX + 14, boatScreenY + boatH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#6e4528';
+    ctx.fillRect(boatX + 16, boatScreenY + 6, boatW - 32, 4);
+    ctx.fillStyle = '#5a3a22';
+    ctx.fillRect(W / 2 - 1, boatScreenY - 14, 2, 14);
+    ctx.fillStyle = '#e54b4b';
+    ctx.beginPath();
+    ctx.moveTo(W / 2, boatScreenY - 14);
+    ctx.lineTo(W / 2 + 10, boatScreenY - 11);
+    ctx.lineTo(W / 2, boatScreenY - 8);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // bubbles
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  for (const b of state.bubbles) {
+    const sy = b.y - camY;
+    if (sy < -10 || sy > H + 10) continue;
+    ctx.beginPath();
+    ctx.arc(b.x, sy, b.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // fishing line
+  const hookScreenY = state.hook.y - camY;
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  const lineStartY = boatScreenY + boatH / 2;
+  if (lineStartY < -20) {
+    // boat off screen — draw simple vertical line from top
+    ctx.moveTo(state.hook.x, -2);
+    ctx.lineTo(state.hook.x, hookScreenY - 6);
+  } else {
+    ctx.moveTo(W / 2, lineStartY);
+    const cp1x = W / 2;
+    const cp1y = lineStartY + (hookScreenY - lineStartY) * 0.4;
+    const cp2x = state.hook.x;
+    const cp2y = lineStartY + (hookScreenY - lineStartY) * 0.7;
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, state.hook.x, hookScreenY - 6);
+  }
+  ctx.stroke();
+
+  // fishes
+  for (const f of state.fishes) {
+    if (!f.alive) continue;
+    const sy = f.y - camY;
+    if (sy < -60 || sy > H + 60) continue;
+    drawFish(f, sy, f === state.caught);
+  }
+
+  // obstacles (during hauling)
+  for (const o of state.obstacles) {
+    const sy = o.y - camY;
+    if (sy < -60 || sy > H + 60) continue;
+    drawFish(o, sy, false);
+  }
+
+  // hook
+  drawHook(state.hook.x, hookScreenY);
+
+  // HP bar above caught
+  if (state.caught) {
+    const barW = 70, barH = 6;
+    const bx = clamp(state.hook.x - barW / 2, 4, W - barW - 4);
+    const by = hookScreenY - 30;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
+    ctx.fillStyle = '#2c2c2c';
+    ctx.fillRect(bx, by, barW, barH);
+    const hpFrac = Math.max(0, state.caught.curHp / state.caught.maxHp);
+    ctx.fillStyle = hpFrac > 0.5 ? '#4caf50' : hpFrac > 0.25 ? '#ffb300' : '#e53935';
+    ctx.fillRect(bx, by, barW * hpFrac, barH);
+  }
+
+  // haul timer bar
+  if (state.hookPhase === 'hauling') {
+    const barW = W * 0.7;
+    const barH = 10;
+    const bx = (W - barW) / 2;
+    const by = 56;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    roundRect(ctx, bx - 2, by - 2, barW + 4, barH + 4, 6);
+    ctx.fill();
+    ctx.fillStyle = '#333';
+    roundRect(ctx, bx, by, barW, barH, 5);
+    ctx.fill();
+    const frac = Math.max(0, state.haulTimer / HAUL_DURATION);
+    const c = frac > 0.5 ? '#62c462' : frac > 0.25 ? '#ffb300' : '#e53935';
+    ctx.fillStyle = c;
+    roundRect(ctx, bx, by, barW * frac, barH, 5);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Тащим · ' + state.haulTimer.toFixed(1) + 'с', W / 2, by - 6);
+  }
+
+  if (state.flash > 0) {
+    ctx.fillStyle = 'rgba(255,80,80,' + (state.flash * 0.45) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function drawFish(f, sy, highlight) {
+  const type = f.type;
+  const shape = type.shape;
+  const cs = CELL_VISUAL_SIZE_STAGE1;
+  const rows = shape.length, cols = shape[0].length;
+  const fishW = cols * cs;
+  const fishH = rows * cs;
+  ctx.save();
+  ctx.translate(f.x, sy);
+  if (f.dir < 0) ctx.scale(-1, 1);
+
+  ctx.fillStyle = shadeColor(type.color, -15);
+  ctx.beginPath();
+  const tailX = -fishW / 2 - 6;
+  ctx.moveTo(tailX, -Math.min(8, fishH / 3));
+  ctx.lineTo(tailX, Math.min(8, fishH / 3));
+  ctx.lineTo(tailX + 8, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = type.color;
+  ctx.strokeStyle = 'rgba(0,0,0,0.32)';
+  ctx.lineWidth = 1;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (!shape[r][c]) continue;
+      const cx = -fishW / 2 + c * cs;
+      const cy = -fishH / 2 + r * cs;
+      roundRect(ctx, cx + 0.5, cy + 0.5, cs - 1, cs - 1, 3);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  const frontC = cols - 1;
+  let frontR = 0;
+  for (let r = 0; r < rows; r++) if (shape[r][frontC]) { frontR = r; break; }
+  const eyeX = -fishW / 2 + frontC * cs + cs * 0.7;
+  const eyeY = -fishH / 2 + frontR * cs + cs * 0.35;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(eyeX, eyeY, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.arc(eyeX + 0.6, eyeY, 1.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (highlight) {
+    ctx.strokeStyle = 'rgba(255,220,0,0.85)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, -fishW / 2 - 3, -fishH / 2 - 3, fishW + 6, fishH + 6, 5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawHook(x, y) {
+  ctx.strokeStyle = '#d8d8d8';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 10);
+  ctx.lineTo(x, y - 3);
+  ctx.arc(x - 4, y - 3, 4, 0, Math.PI, false);
+  ctx.lineTo(x - 8, y - 8);
+  ctx.stroke();
+  ctx.fillStyle = '#d8d8d8';
+  ctx.beginPath();
+  ctx.arc(x, y - 10, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function shadeColor(hex, percent) {
+  const num = parseInt(hex.replace('#',''), 16);
+  let r = (num >> 16) + percent;
+  let g = ((num >> 8) & 0xff) + percent;
+  let b = (num & 0xff) + percent;
+  r = Math.max(0, Math.min(255, r));
+  g = Math.max(0, Math.min(255, g));
+  b = Math.max(0, Math.min(255, b));
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}
+
+function flashMessage(text, color) {
+  const m = document.getElementById('message');
+  m.textContent = text;
+  if (color) m.style.color = color;
+  m.classList.remove('show');
+  void m.offsetWidth;
+  m.classList.add('show');
+  clearTimeout(flashMessage._t);
+  flashMessage._t = setTimeout(() => m.classList.remove('show'), 1400);
+}
+
+// ===== Rotation =====
+function rotateShape(shape) {
+  const R = shape.length, C = shape[0].length;
+  const out = Array.from({ length: C }, () => Array(R).fill(0));
+  for (let r = 0; r < R; r++) {
+    for (let c = 0; c < C; c++) {
+      out[c][R - 1 - r] = shape[r][c];
+    }
+  }
+  return out;
+}
+function getRotatedShape(baseShape, rotation) {
+  let s = baseShape;
+  const r = (((rotation || 0) % 4) + 4) % 4;
+  for (let i = 0; i < r; i++) s = rotateShape(s);
+  return s;
+}
+
+// ===== Stage 2: storage =====
+function getTypeById(id) { return FISH_TYPES.find(t => t.id === id); }
+
+function startStage2(caughtType) {
+  state.stage = 'storage';
+  const fishId = 'f' + (state.nextFishId++);
+  state.heldFishes.push({ id: fishId, typeId: caughtType.id, rotation: 0 });
+  document.getElementById('storage-view').classList.add('active');
+  updateHud();
+  renderStorage();
+}
+
+function renderStorage() {
+  document.querySelectorAll('.fish-piece').forEach(p => p.remove());
+  const grid = document.getElementById('storage-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < GRID_CELLS; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.idx = i;
+    grid.appendChild(cell);
+  }
+  requestAnimationFrame(() => {
+    for (const fid in state.placedFish) {
+      const p = state.placedFish[fid];
+      const piece = buildFishPiece(fid, p.typeId, p.rotation || 0);
+      positionPieceOnGrid(piece, p.originX, p.originY, p.rotation || 0, grid);
+      grid.appendChild(piece);
+    }
+  });
+
+  const holding = document.getElementById('holding-area');
+  for (const node of [...holding.children]) {
+    if (node.id !== 'holding-label') node.remove();
+  }
+  for (const f of state.heldFishes) {
+    const wrap = document.createElement('div');
+    wrap.className = 'holding-fish-wrap';
+    const piece = buildFishPiece(f.id, f.typeId, f.rotation || 0);
+    piece.style.position = 'relative';
+    const shape = getRotatedShape(getTypeById(f.typeId).shape, f.rotation || 0);
+    const cols = shape[0].length, rows = shape.length;
+    const cellPx = 26;
+    piece.style.width = (cols * cellPx + (cols - 1) * 3) + 'px';
+    piece.style.height = (rows * cellPx + (rows - 1) * 3) + 'px';
+    wrap.appendChild(piece);
+    holding.appendChild(wrap);
+  }
+  updateNextButton();
+}
+
+function buildFishPiece(fishId, typeId, rotation) {
+  const type = getTypeById(typeId);
+  const shape = getRotatedShape(type.shape, rotation || 0);
+  const rows = shape.length, cols = shape[0].length;
+  const piece = document.createElement('div');
+  piece.className = 'fish-piece';
+  piece.dataset.fishId = fishId;
+  piece.dataset.typeId = typeId;
+  piece.dataset.rotation = String(rotation || 0);
+  piece.style.setProperty('--fish-color', type.color);
+
+  const inner = document.createElement('div');
+  inner.className = 'fish-grid';
+  inner.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+  inner.style.gridTemplateRows = 'repeat(' + rows + ', 1fr)';
+
+  const frontC = cols - 1;
+  let frontR = 0;
+  for (let r = 0; r < rows; r++) if (shape[r][frontC]) { frontR = r; break; }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = shape[r][c] ? 'fish-cell' : 'fish-cell empty';
+      if (shape[r][c] && r === frontR && c === frontC) {
+        const eye = document.createElement('div');
+        eye.className = 'eye';
+        cell.appendChild(eye);
+      }
+      inner.appendChild(cell);
+    }
+  }
+  piece.appendChild(inner);
+  piece.addEventListener('pointerdown', onPiecePointerDown);
+  return piece;
+}
+
+function positionPieceOnGrid(piece, originX, originY, rotation, grid) {
+  const type = getTypeById(piece.dataset.typeId);
+  const shape = getRotatedShape(type.shape, rotation || 0);
+  const cols = shape[0].length, rows = shape.length;
+  const cells = grid.children;
+  const cell0 = cells[originY * GRID_SIZE + originX];
+  const cellLast = cells[(originY + rows - 1) * GRID_SIZE + (originX + cols - 1)];
+  piece.style.left = cell0.offsetLeft + 'px';
+  piece.style.top = cell0.offsetTop + 'px';
+  piece.style.width = (cellLast.offsetLeft + cellLast.offsetWidth - cell0.offsetLeft) + 'px';
+  piece.style.height = (cellLast.offsetTop + cellLast.offsetHeight - cell0.offsetTop) + 'px';
+}
+
+// ===== Drag + tap-to-rotate =====
+function getCurrentRotation(fishId) {
+  if (state.placedFish[fishId]) return state.placedFish[fishId].rotation || 0;
+  const h = state.heldFishes.find(f => f.id === fishId);
+  return h ? (h.rotation || 0) : 0;
+}
+
+function onPiecePointerDown(e) {
+  e.preventDefault();
+  const piece = e.currentTarget;
+  state.drag = {
+    piece,
+    fishId: piece.dataset.fishId,
+    typeId: piece.dataset.typeId,
+    type: getTypeById(piece.dataset.typeId),
+    rotation: getCurrentRotation(piece.dataset.fishId),
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    started: false,
+  };
+  window.addEventListener('pointermove', onDragMove);
+  window.addEventListener('pointerup', onDragUp);
+  window.addEventListener('pointercancel', onDragUp);
+}
+
+function initiateActualDrag(e) {
+  const d = state.drag;
+  const piece = d.piece;
+  const game = document.getElementById('game');
+  const grid = document.getElementById('storage-grid');
+  const gridRect = grid.getBoundingClientRect();
+  const cellSize = (gridRect.width - 10 - (GRID_SIZE - 1) * 3) / GRID_SIZE; // 5*2 padding, 3*(n-1) gaps
+  const shape = getRotatedShape(d.type.shape, d.rotation);
+  d.shape = shape;
+  d.pieceWidth = shape[0].length * cellSize + (shape[0].length - 1) * 3;
+  d.pieceHeight = shape.length * cellSize + (shape.length - 1) * 3;
+
+  if (state.placedFish[d.fishId]) {
+    d.wasIn = 'grid';
+    d.wasOrigin = {
+      x: state.placedFish[d.fishId].originX,
+      y: state.placedFish[d.fishId].originY,
+    };
+    delete state.placedFish[d.fishId];
+  } else {
+    d.wasIn = 'holding';
+    state.heldFishes = state.heldFishes.filter(f => f.id !== d.fishId);
+  }
+
+  piece.classList.add('dragging');
+  piece.style.position = 'absolute';
+  piece.style.width = d.pieceWidth + 'px';
+  piece.style.height = d.pieceHeight + 'px';
+
+  const gameRect = game.getBoundingClientRect();
+  d.offsetX = d.pieceWidth / 2;
+  d.offsetY = d.pieceHeight / 2;
+  piece.style.left = (e.clientX - gameRect.left - d.offsetX) + 'px';
+  piece.style.top = (e.clientY - gameRect.top - d.offsetY) + 'px';
+  game.appendChild(piece);
+
+  d.started = true;
+}
+
+function onDragMove(e) {
+  if (!state.drag) return;
+  e.preventDefault();
+
+  if (!state.drag.started) {
+    const dx = e.clientX - state.drag.startClientX;
+    const dy = e.clientY - state.drag.startClientY;
+    if (Math.hypot(dx, dy) < 6) return;
+    initiateActualDrag(e);
+  }
+
+  const d = state.drag;
+  const game = document.getElementById('game');
+  const gameRect = game.getBoundingClientRect();
+  d.piece.style.left = (e.clientX - gameRect.left - d.offsetX) + 'px';
+  d.piece.style.top = (e.clientY - gameRect.top - d.offsetY) + 'px';
+
+  const grid = document.getElementById('storage-grid');
+  const cells = grid.querySelectorAll('.cell');
+  cells.forEach(c => c.classList.remove('hint-valid', 'hint-invalid'));
+  document.getElementById('holding-area').classList.remove('hint-valid');
+
+  const drop = getDropTarget();
+  if (drop.type === 'grid') {
+    const valid = canPlaceAt(d.shape, drop.x, drop.y, d.fishId);
+    const sh = d.shape;
+    for (let r = 0; r < sh.length; r++) {
+      for (let c = 0; c < sh[r].length; c++) {
+        if (!sh[r][c]) continue;
+        const gx = drop.x + c, gy = drop.y + r;
+        if (gx < 0 || gx >= GRID_SIZE || gy < 0 || gy >= GRID_SIZE) continue;
+        const cell = cells[gy * GRID_SIZE + gx];
+        cell.classList.add(valid ? 'hint-valid' : 'hint-invalid');
+      }
+    }
+  } else if (drop.type === 'holding') {
+    document.getElementById('holding-area').classList.add('hint-valid');
+  }
+}
+
+function onDragUp(e) {
+  if (!state.drag) return;
+  e.preventDefault();
+  window.removeEventListener('pointermove', onDragMove);
+  window.removeEventListener('pointerup', onDragUp);
+  window.removeEventListener('pointercancel', onDragUp);
+
+  if (!state.drag.started) {
+    // Это был тап — поворачиваем
+    rotateFish(state.drag.fishId);
+    state.drag = null;
+    return;
+  }
+
+  const d = state.drag;
+  d.piece.classList.remove('dragging');
+  document.querySelectorAll('#storage-grid .cell').forEach(c => c.classList.remove('hint-valid', 'hint-invalid'));
+  document.getElementById('holding-area').classList.remove('hint-valid');
+
+  const drop = getDropTarget();
+  let placed = false;
+  if (drop.type === 'grid' && canPlaceAt(d.shape, drop.x, drop.y, d.fishId)) {
+    state.placedFish[d.fishId] = {
+      typeId: d.typeId,
+      originX: drop.x, originY: drop.y,
+      rotation: d.rotation,
+    };
+    placed = true;
+  } else if (drop.type === 'holding') {
+    state.heldFishes.push({ id: d.fishId, typeId: d.typeId, rotation: d.rotation });
+    placed = true;
+  }
+
+  if (!placed) {
+    if (d.wasIn === 'grid') {
+      state.placedFish[d.fishId] = {
+        typeId: d.typeId,
+        originX: d.wasOrigin.x, originY: d.wasOrigin.y,
+        rotation: d.rotation,
+      };
+    } else {
+      state.heldFishes.push({ id: d.fishId, typeId: d.typeId, rotation: d.rotation });
+    }
+  }
+
+  d.piece.remove();
+  state.drag = null;
+  renderStorage();
+}
+
+function rotateFish(fishId) {
+  if (state.placedFish[fishId]) {
+    const p = state.placedFish[fishId];
+    const t = getTypeById(p.typeId);
+    const newRot = (((p.rotation || 0) + 1) % 4);
+    const newShape = getRotatedShape(t.shape, newRot);
+    // Try kicks: in-place, then small shifts
+    const kicks = [[0,0],[-1,0],[1,0],[0,-1],[0,1],
+                   [-2,0],[2,0],[0,-2],[0,2],
+                   [-1,-1],[1,-1],[-1,1],[1,1]];
+    let placed = false;
+    for (const [dx, dy] of kicks) {
+      if (canPlaceAt(newShape, p.originX + dx, p.originY + dy, fishId)) {
+        p.originX += dx;
+        p.originY += dy;
+        p.rotation = newRot;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      flashMessage('Не помещается', '#ff6b6b');
+      return;
+    }
+  } else {
+    const h = state.heldFishes.find(f => f.id === fishId);
+    if (h) h.rotation = ((h.rotation || 0) + 1) % 4;
+  }
+  renderStorage();
+}
+
+function getDropTarget() {
+  if (!state.drag) return { type: 'none' };
+  const piece = state.drag.piece;
+  const pr = piece.getBoundingClientRect();
+  const cx = pr.left + pr.width / 2;
+  const cy = pr.top + pr.height / 2;
+
+  const grid = document.getElementById('storage-grid');
+  const gr = grid.getBoundingClientRect();
+  if (cx >= gr.left - 20 && cx <= gr.right + 20 && cy >= gr.top - 20 && cy <= gr.bottom + 20) {
+    const cells = grid.children;
+    let bestIdx = -1, bestDist = Infinity;
+    for (let i = 0; i < cells.length; i++) {
+      const cr = cells[i].getBoundingClientRect();
+      const d = Math.hypot(cr.left - pr.left, cr.top - pr.top);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    if (bestIdx >= 0) {
+      return { type: 'grid', x: bestIdx % GRID_SIZE, y: Math.floor(bestIdx / GRID_SIZE) };
+    }
+  }
+
+  const holding = document.getElementById('holding-area');
+  const hr = holding.getBoundingClientRect();
+  if (cx >= hr.left && cx <= hr.right && cy >= hr.top && cy <= hr.bottom) {
+    return { type: 'holding' };
+  }
+  return { type: 'none' };
+}
+
+function canPlaceAt(shape, originX, originY, excludeFishId) {
+  const occ = Array(GRID_CELLS).fill(null);
+  for (const fid in state.placedFish) {
+    if (fid === excludeFishId) continue;
+    const p = state.placedFish[fid];
+    const t = getTypeById(p.typeId);
+    const sh = getRotatedShape(t.shape, p.rotation || 0);
+    for (let r = 0; r < sh.length; r++) {
+      for (let c = 0; c < sh[r].length; c++) {
+        if (!sh[r][c]) continue;
+        const x = p.originX + c, y = p.originY + r;
+        if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) occ[y * GRID_SIZE + x] = fid;
+      }
+    }
+  }
+  for (let r = 0; r < shape.length; r++) {
+    for (let c = 0; c < shape[r].length; c++) {
+      if (!shape[r][c]) continue;
+      const x = originX + c, y = originY + r;
+      if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return false;
+      if (occ[y * GRID_SIZE + x]) return false;
+    }
+  }
+  return true;
+}
+
+function updateNextButton() {
+  const btn = document.getElementById('next-round-btn');
+  const heldCount = state.heldFishes.length;
+  if (state.round >= MAX_ROUNDS) {
+    btn.textContent = heldCount > 0 ? 'Завершить (отпустить ' + heldCount + ')' : 'Завершить';
+  } else {
+    btn.textContent = heldCount > 0 ? 'Дальше (отпустить ' + heldCount + ')' : 'Следующий раунд';
+  }
+  btn.classList.toggle('warn', heldCount > 0);
+}
+
+function nextRound() {
+  state.heldFishes = [];
+  if (state.round >= MAX_ROUNDS) {
+    endGame();
+    return;
+  }
+  state.round++;
+  document.getElementById('storage-view').classList.remove('active');
+  document.querySelectorAll('.fish-piece').forEach(p => p.remove());
+  document.getElementById('hud-round').textContent = 'Раунд ' + state.round + '/' + MAX_ROUNDS;
+  state.stage = 'fishing';
+  initStage1();
+}
+
+function endGame() {
+  const placedIds = Object.keys(state.placedFish);
+  let cells = 0;
+  const counts = {};
+  for (const fid of placedIds) {
+    const p = state.placedFish[fid];
+    const t = getTypeById(p.typeId);
+    cells += t.shape.flat().filter(Boolean).length;
+    counts[t.name] = (counts[t.name] || 0) + 1;
+  }
+  const score = cells * 10 + placedIds.length * 5;
+  let breakdown = Object.entries(counts).map(([n, c]) => n + ' ×' + c).join(', ');
+  if (!breakdown) breakdown = 'улов отсутствует';
+
+  document.getElementById('storage-view').classList.remove('active');
+  document.getElementById('overlay-title').textContent = 'Конец рейса!';
+  document.getElementById('overlay-text').innerHTML =
+    'Доставлено рыб: <b>' + placedIds.length + '</b><br>' +
+    'Заполнено ячеек: <b>' + cells + '/' + GRID_CELLS + '</b><br>' +
+    'Очки: <b>' + score + '</b><br><br>' +
+    '<span style="opacity:0.8;font-size:13px;">' + breakdown + '</span>';
+  document.getElementById('overlay').classList.add('active');
+}
+
+function restartGame() {
+  document.getElementById('overlay').classList.remove('active');
+  document.getElementById('storage-view').classList.remove('active');
+  document.querySelectorAll('.fish-piece').forEach(p => p.remove());
+  state = newGameState();
+  document.getElementById('hud-round').textContent = 'Раунд 1/' + MAX_ROUNDS;
+  resize();
+  initStage1();
+  state.paused = false;
+}
+
+// ===== Input =====
+function bindHoldBtn(btn, key) {
+  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); state[key] = true; });
+  const release = () => { if (state) state[key] = false; };
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointerleave', release);
+  btn.addEventListener('pointercancel', release);
+}
+bindHoldBtn(document.getElementById('btn-left'), 'inputLeft');
+bindHoldBtn(document.getElementById('btn-right'), 'inputRight');
+
+document.getElementById('btn-up').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (!state || state.stage !== 'fishing') return;
+  if (state.hookPhase === 'descending') {
+    state.hookPhase = 'rising';
+    flashMessage('Поднимаем', '#7bd680');
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (!state) return;
+  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.inputLeft = true;
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.inputRight = true;
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') {
+    if (state.stage === 'fishing' && state.hookPhase === 'descending') {
+      state.hookPhase = 'rising';
+    }
+  }
+});
+window.addEventListener('keyup', (e) => {
+  if (!state) return;
+  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.inputLeft = false;
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.inputRight = false;
+});
+
+document.getElementById('next-round-btn').addEventListener('click', nextRound);
+document.getElementById('restart-btn').addEventListener('click', restartGame);
+
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('start-screen').classList.add('hidden');
+  state = newGameState();
+  resize();
+  initStage1();
+  state.paused = false;
+});
+
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
