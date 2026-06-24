@@ -72,7 +72,9 @@ html, body {
   align-items: center;
   padding: 0 22px;
   z-index: 5;
+  transition: opacity 0.2s;
 }
+#controls.hidden { opacity: 0; pointer-events: none; }
 .ctrl-btn {
   width: 76px; height: 76px;
   border-radius: 50%;
@@ -92,14 +94,6 @@ html, body {
   background: rgba(255,255,255,0.4);
   transform: scale(0.94);
 }
-.ctrl-up {
-  width: 60px;
-  height: 60px;
-  font-size: 24px;
-  background: rgba(80, 200, 120, 0.28);
-  border-color: rgba(80, 200, 120, 0.65);
-}
-.ctrl-up:active { background: rgba(80, 200, 120, 0.55); }
 
 #storage-view {
   position: absolute;
@@ -124,6 +118,103 @@ html, body {
   margin-bottom: 4px;
 }
 .storage-subtitle b { color: #ffd86b; font-weight: 600; }
+
+#lb-pill {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: 12px;
+  z-index: 30;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,216,107,0.5);
+  color: #ffd86b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 11px;
+  border-radius: 14px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+#lb-pill:active { transform: scale(0.95); }
+
+#leaderboard {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top, 0px)) + 42px);
+  right: 12px;
+  width: 244px;
+  max-width: calc(100% - 24px);
+  z-index: 29;
+  background: rgba(18,28,40,0.97);
+  border: 1px solid rgba(255,216,107,0.3);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0,0,0,0.55);
+  overflow: hidden;
+  padding: 9px;
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: top right;
+  transform: scale(0.7);
+  transition: opacity 0.2s ease, transform 0.22s cubic-bezier(0.18,0.9,0.32,1.2);
+}
+#leaderboard.expanded {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+.lb-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.6;
+  margin-bottom: 6px;
+  text-align: center;
+}
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  font-size: 12px;
+  margin-bottom: 1px;
+  position: relative;
+  transition: transform 0.45s ease, background 0.3s;
+}
+.lb-row.is-player {
+  background: rgba(98,196,98,0.22);
+  box-shadow: inset 0 0 0 1px rgba(98,196,98,0.5);
+  font-weight: 700;
+}
+.lb-rank {
+  width: 15px;
+  text-align: center;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+.lb-avatar { font-size: 14px; }
+.lb-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lb-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 30px;
+  text-align: right;
+}
+.lb-delta {
+  font-size: 10px;
+  font-weight: 700;
+  color: #7bd680;
+  min-width: 26px;
+  text-align: right;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.lb-delta.show { opacity: 1; }
+.lb-delta.zero { color: rgba(255,255,255,0.35); }
 #storage-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -322,13 +413,17 @@ html, body {
     <div id="message"></div>
     <div id="controls">
       <button class="ctrl-btn" id="btn-left">◀</button>
-      <button class="ctrl-btn ctrl-up" id="btn-up" title="Поднять без улова">↑</button>
       <button class="ctrl-btn" id="btn-right">▶</button>
     </div>
 
     <div id="storage-view">
+      <button id="lb-pill">🏆 <span id="lb-pill-rank">1/6</span> · <span id="lb-pill-score">0</span></button>
       <div class="storage-title">Склад судна</div>
       <div class="storage-subtitle">Тащите рыбу · <b>тап</b> по рыбе — поворот</div>
+      <div id="leaderboard">
+        <div class="lb-head">🏆 Лидерборд · раунд <span id="lb-round">1</span></div>
+        <div id="lb-rows"></div>
+      </div>
       <div id="storage-grid"></div>
       <div id="holding-area">
         <span id="holding-label">Отпустить в море</span>
@@ -349,10 +444,10 @@ html, body {
       <h1>Рыбалка</h1>
       <div class="subtitle">прототип · 5 раундов</div>
       <div class="rules">
-        <b>1.</b> Опускайте крючок (◀ ▶ или A/D), кнопка <b>↑</b> — поднять без улова.<br>
+        <b>1.</b> Опускайте крючок (◀ ▶ или A/D), пока не зацепите рыбу.<br>
         <b>2.</b> Глубина бесконечная — чем глубже, тем больше рыбы.<br>
-        <b>3.</b> Поймали — 10 секунд тащим: рыба дрыгается, навстречу прилетают другие. Уворачивайтесь.<br>
-        <b>4.</b> На складе 4×4: <b>тащите</b> в ячейки, <b>тапайте</b> для поворота.
+        <b>3.</b> Поймали — 10 секунд тащим. Со всех сторон лезут хищники — <b>тапайте</b> по ним. Каждый укус = -1 шкала. Если все шкалы сгорят — рыба сорвётся и <b>раунд проигран</b>. На глубине хищники крупнее, шкал меньше (4→3→2).<br>
+        <b>4.</b> На складе 5×5: <b>тащите</b> в ячейки, <b>тапайте</b> для поворота. Соревнуйтесь с 5 соперниками за место в топе!
       </div>
       <button class="btn-primary" id="start-btn">Начать ловлю</button>
     </div>
@@ -382,15 +477,118 @@ const CELL_VISUAL_SIZE_STAGE1 = 18;
 const MAX_ROUNDS = 5;
 const WATER_SURFACE_FRAC = 0.13;
 const DESCENT_SPEED = 140;
-const RISE_SPEED = 100;
 const HOOK_SPEED = 230;
 const DEPTH_PX_PER_M = 20; // 20 px = 1 m
 const GRID_SIZE = 5;
 const GRID_CELLS = GRID_SIZE * GRID_SIZE;
-const HAUL_DURATION = 10; // seconds of "pulling up" mini-game after catch
-const HAUL_RISE_SPEED = 25; // px/s — hook visually drifts up during haul
-const OBSTACLE_MIN_INTERVAL = 0.30;
-const OBSTACLE_MAX_INTERVAL = 0.85;
+const HAUL_DURATION = 10;
+const PREDATOR_MIN_INTERVAL = 0.55;
+const PREDATOR_MAX_INTERVAL = 1.3;
+const YANK_DURATION = 0.55; // s — dramatic rip off-screen
+
+const PREDATOR_TYPES = [
+  // shallow — always available
+  { name: 'Пиранья',   color: '#d6322d', shape: [[1,1]],           speed: 95,  minDepth: 0 },
+  { name: 'Барракуда', color: '#8d5223', shape: [[1,1,1]],         speed: 130, minDepth: 0 },
+  { name: 'Мурена',    color: '#5a2a5a', shape: [[1],[1],[1]],     speed: 110, minDepth: 0 },
+  // deeper waters — bigger, meaner
+  { name: 'Акула',     color: '#3a4858', shape: [[1,1,1,1]],       speed: 135, minDepth: 100 },
+  { name: 'Касатка',   color: '#171c24', shape: [[1,1,1],[1,1,1]], speed: 120, minDepth: 220 },
+];
+
+function bitesForDepth(depthM) {
+  if (depthM < 50) return 4;
+  if (depthM < 150) return 3;
+  return 2;
+}
+
+const BOT_PROFILES = [
+  { id: 'b1', name: 'Капитан_Боб',   avatar: '⚓', personality: 'steady' },
+  { id: 'b2', name: 'LuckyJim',      avatar: '🎰', personality: 'lucky' },
+  { id: 'b3', name: 'AquaPro',       avatar: '🐠', personality: 'slowstart' },
+  { id: 'b4', name: 'FisherKing',    avatar: '👑', personality: 'frontrunner' },
+  { id: 'b5', name: 'Анна_Рыбак',    avatar: '🦑', personality: 'catchup' },
+];
+
+// ===== Scoring =====
+function fishCells(type) { return type.shape.flat().filter(Boolean).length; }
+function fishValue(type) { return fishCells(type) * 10 + 5; }
+
+function computePlayerScore() {
+  let cells = 0, count = 0;
+  for (const fid in state.placedFish) {
+    cells += fishCells(getTypeById(state.placedFish[fid].typeId));
+    count++;
+  }
+  return cells * 10 + count * 5;
+}
+
+// Sample a plausible per-round catch value, derived from real fish values.
+// Later rounds skew toward bigger (deeper) fish, mirroring the player's options.
+function sampleRoundFishValue(round) {
+  const depthBias = (round - 1) / Math.max(1, MAX_ROUNDS - 1); // 0..1
+  const weighted = FISH_TYPES.map(t => {
+    const cells = fishCells(t);
+    const w = (1 - depthBias) * (1.6 / cells) + depthBias * (cells / 8) + 0.05;
+    return { v: fishValue(t), w };
+  });
+  const total = weighted.reduce((s, e) => s + e.w, 0);
+  let r = Math.random() * total;
+  for (const e of weighted) { r -= e.w; if (r <= 0) return e.v; }
+  return weighted[weighted.length - 1].v;
+}
+
+// One round's score gain for a bot — personality + believable variance + occasional "сорвалась".
+function botRoundGain(bot, round, playerTotal) {
+  const depthBias = (round - 1) / Math.max(1, MAX_ROUNDS - 1);
+  let v = sampleRoundFishValue(round);
+
+  // occasionally the bot "loses" the fish to predators (more likely deeper)
+  const loseChance = 0.07 + depthBias * 0.13;
+  if (Math.random() < loseChance) {
+    return Math.round(v * Math.random() * 0.25); // mostly nothing
+  }
+
+  switch (bot.personality) {
+    case 'steady':      v *= 0.95 + Math.random() * 0.12; break;        // consistent, slightly above avg
+    case 'lucky':       v *= Math.random() < 0.5 ? 0.45 + Math.random() * 0.2 : 1.5 + Math.random() * 0.4; break; // boom or bust
+    case 'slowstart':   v *= 0.55 + depthBias * 1.0 + Math.random() * 0.15; break;  // weak early, strong late
+    case 'frontrunner': v *= 1.45 - depthBias * 0.85 + Math.random() * 0.15; break; // strong early, fades
+    case 'catchup': {                                                   // rubber-bands toward the player
+      const behind = playerTotal - bot.score;
+      const boost = behind > 0 ? Math.min(0.65, behind / 320) : -0.1;
+      v *= 1 + boost + (Math.random() - 0.5) * 0.2;
+      break;
+    }
+  }
+  return Math.max(0, Math.round(v));
+}
+
+function applyBotGains() {
+  const playerTotal = computePlayerScore();
+  for (const bot of state.bots) {
+    bot.lastGain = botRoundGain(bot, state.round, playerTotal);
+    bot.score += bot.lastGain;
+  }
+}
+
+function getLeaderboardEntries() {
+  const entries = state.bots.map(b => ({
+    id: b.id, name: b.name, avatar: b.avatar,
+    score: b.score, lastGain: b.lastGain || 0, isPlayer: false,
+  }));
+  entries.push({
+    id: 'player', name: 'Вы', avatar: '🎣',
+    score: computePlayerScore(), lastGain: state.playerLastGain || 0, isPlayer: true,
+  });
+  entries.sort((a, b) => b.score - a.score || (a.isPlayer ? -1 : 1));
+  return entries;
+}
+
+function playerRank() {
+  const entries = getLeaderboardEntries();
+  return entries.findIndex(e => e.isPlayer) + 1;
+}
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -430,9 +628,15 @@ function newGameState() {
     inputRight: false,
     flash: 0,
     drag: null,
-    obstacles: [],
-    obstacleTimer: 0,
+    predators: [],
+    predatorTimer: 0,
     haulTimer: 0,
+    yankProgress: 0,
+    lostTimer: 0,
+    tapEffects: [],
+    bots: BOT_PROFILES.map(b => ({ id: b.id, name: b.name, avatar: b.avatar, personality: b.personality, score: 0 })),
+    botsAppliedForRound: 0,
+    lbExpanded: false,
   };
 }
 
@@ -446,11 +650,17 @@ function initStage1() {
   state.fishes = [];
   state.bubbles = [];
   state.cameraY = 0;
-  state.lowestSpawnedY = surfaceWorldY() + 80;
+  // Fish-free zone near the surface: the camera only starts following (and the
+  // boat scrolls off the top) once the hook passes ~0.55*H. Keep the first fish
+  // below that, so no catch — and no off-screen yank — happens while the boat is
+  // still visible (otherwise the hook can rip up past the boat).
+  state.lowestSpawnedY = surfaceWorldY() + H * 0.55 + 30;
   state.flash = 0;
-  state.obstacles = [];
-  state.obstacleTimer = 0;
+  state.predators = [];
+  state.predatorTimer = 0;
   state.haulTimer = 0;
+  state.yankProgress = 0;
+  state.tapEffects = [];
   spawnAhead();
   for (let i = 0; i < 22; i++) {
     state.bubbles.push({
@@ -513,26 +723,66 @@ function despawnFar() {
   );
 }
 
-function spawnObstacle() {
+function spawnPredator() {
   const depthM = Math.max(0, (state.hook.y - surfaceWorldY()) / DEPTH_PX_PER_M);
-  const type = pickFishType(depthM);
-  const fishW = type.shape[0].length * CELL_VISUAL_SIZE_STAGE1;
-  const fishH = type.shape.length * CELL_VISUAL_SIZE_STAGE1;
-  const fromLeft = Math.random() < 0.5;
-  const speed = 90 + Math.random() * 130;
-  // place mostly within the screen, offset relative to hook
-  const yOffsetFromHook = (Math.random() - 0.45) * H * 0.55;
-  state.obstacles.push({
-    type,
-    x: fromLeft ? -fishW : W + fishW,
-    yOffsetFromHook,
-    y: state.hook.y + yOffsetFromHook,
-    vx: fromLeft ? speed : -speed,
-    bobPhase: Math.random() * Math.PI * 2,
+  const available = PREDATOR_TYPES.filter(t => (t.minDepth || 0) <= depthM);
+  const type = available[Math.floor(Math.random() * available.length)];
+  // size & speed scale with depth — bigger, meaner predators deep down
+  const scale = 1 + Math.min(1.4, depthM / 220);
+  const fishW = type.shape[0].length * CELL_VISUAL_SIZE_STAGE1 * scale;
+  const fishH = type.shape.length * CELL_VISUAL_SIZE_STAGE1 * scale;
+  // pick a side: 0 left, 1 right, 2 below
+  const side = Math.random() < 0.45 ? 0 : (Math.random() < 0.5 ? 1 : 2);
+  let x, y;
+  const hookSY = H * 0.55; // hook stays around this screen Y during haul
+  if (side === 0) {
+    x = -fishW;
+    y = state.cameraY + hookSY + (Math.random() - 0.5) * H * 0.55;
+  } else if (side === 1) {
+    x = W + fishW;
+    y = state.cameraY + hookSY + (Math.random() - 0.5) * H * 0.55;
+  } else {
+    x = Math.random() * W;
+    y = state.cameraY + H + fishH;
+  }
+  state.predators.push({
+    type, scale,
+    x, y,
     w: fishW, h: fishH,
-    dir: fromLeft ? 1 : -1,
-    alive: true,
+    state: 'approaching', // approaching | fleeing
+    speed: type.speed * (0.85 + Math.random() * 0.4) * (1 + depthM / 700),
+    bobPhase: Math.random() * Math.PI * 2,
+    dir: x < W / 2 ? 1 : -1,
+    vx: 0, vy: 0,
+    age: 0,
   });
+}
+
+function tryTapPredator(canvasX, canvasY) {
+  if (!state || state.hookPhase !== 'hauling') return false;
+  const wx = canvasX;
+  const wy = canvasY + state.cameraY;
+  let bestIdx = -1, bestDist = Infinity;
+  for (let i = 0; i < state.predators.length; i++) {
+    const p = state.predators[i];
+    if (p.state !== 'approaching') continue;
+    const tapR = Math.max(p.w, p.h) * 0.7 + 10;
+    const d = Math.hypot(p.x - wx, p.y - wy);
+    if (d < tapR && d < bestDist) { bestDist = d; bestIdx = i; }
+  }
+  state.tapEffects.push({ x: wx, y: wy, age: 0, hit: bestIdx >= 0 });
+  if (bestIdx >= 0) {
+    const p = state.predators[bestIdx];
+    p.state = 'fleeing';
+    const dx = p.x - (state.caught ? state.caught.x : W / 2);
+    const dy = p.y - (state.caught ? state.caught.y : state.cameraY + H * 0.55);
+    const dist = Math.hypot(dx, dy) || 1;
+    p.vx = (dx / dist) * 320 + (Math.random() - 0.5) * 80;
+    p.vy = (dy / dist) * 320 - 60;
+    p.dir = p.vx > 0 ? 1 : -1;
+    return true;
+  }
+  return false;
 }
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -553,14 +803,20 @@ function updateHud() {
     const depth = Math.max(0, Math.floor((state.hook.y - surfaceWorldY()) / DEPTH_PX_PER_M));
     let phase;
     if (state.hookPhase === 'descending') phase = 'опускаем';
-    else if (state.hookPhase === 'hauling') phase = '🎣 тащим · ' + state.haulTimer.toFixed(1) + 'с';
-    else if (state.hookPhase === 'rising') phase = 'поднимаем';
-    else if (state.hookPhase === 'escaping') phase = 'сорвалась';
+    else if (state.hookPhase === 'hauling') phase = '🛡 защищаем · ' + state.haulTimer.toFixed(1) + 'с';
+    else if (state.hookPhase === 'yanking') phase = '🎣 рывок!';
+    else if (state.hookPhase === 'lost') phase = '💔 раунд проигран';
     else phase = '';
     document.getElementById('hud-status').textContent = depth + 'м · ' + phase;
   } else {
     document.getElementById('hud-status').textContent = 'разместите улов';
   }
+  // hide directional controls while defending / yanking / lost
+  const hideControls = state.stage === 'fishing' &&
+    (state.hookPhase === 'hauling' || state.hookPhase === 'yanking' || state.hookPhase === 'lost');
+  const ctrl = document.getElementById('controls');
+  if (hideControls) ctrl.classList.add('hidden');
+  else ctrl.classList.remove('hidden');
 }
 
 function update(dt) {
@@ -596,92 +852,114 @@ function update(dt) {
       if (Math.abs(f.x - state.hook.x) < f.w / 2 + 5 &&
           Math.abs(f.y - state.hook.y) < f.h / 2 + 5) {
         state.caught = f;
-        f.maxHp = f.type.hp;
-        f.curHp = f.type.hp;
+        const catchDepthM = Math.max(0, (state.hook.y - surfaceWorldY()) / DEPTH_PX_PER_M);
+        f.maxBites = bitesForDepth(catchDepthM);
+        f.bitesLeft = f.maxBites;
         f.wigglePhase = Math.random() * Math.PI * 2;
         state.hookPhase = 'hauling';
         state.haulTimer = HAUL_DURATION;
-        state.obstacleTimer = 0.5;
-        state.obstacles = [];
+        state.predatorTimer = 1.0;
+        state.predators = [];
+        state.tapEffects = [];
+        state.hookBaseX = state.hook.x;
         flashMessage('Клюнула: ' + f.type.name + '!', '#ffd86b');
         break;
       }
     }
   } else if (state.hookPhase === 'hauling') {
     state.haulTimer -= dt;
-    // visual slow rise for feel; camera will follow
-    state.hook.y -= HAUL_RISE_SPEED * dt;
+    // hook stays put at catch depth — player focuses on defending
 
     const f = state.caught;
-    f.wigglePhase += f.type.wiggleFreq * dt * 60;
-    const wiggle =
-      Math.sin(f.wigglePhase) * f.type.wiggleAmp +
-      Math.sin(f.wigglePhase * 2.7 + 1) * f.type.wiggleAmp * 0.25;
-
-    state.hookBaseX += horiz * HOOK_SPEED * dt;
-    const halfClamp = Math.max(20, f.type.wiggleAmp + 10);
-    state.hookBaseX = clamp(state.hookBaseX, halfClamp, W - halfClamp);
-    state.hook.x = state.hookBaseX + wiggle;
-    state.hook.x = clamp(state.hook.x, 10, W - 10);
-
+    f.wigglePhase += f.type.wiggleFreq * dt * 40;
+    // caught fish just dangles with mild side-to-side; no player movement
+    const dangle = Math.sin(f.wigglePhase) * 6;
+    state.hook.x = state.hookBaseX + dangle;
     f.x = state.hook.x;
     f.y = state.hook.y + 14;
 
-    // spawn incoming obstacles
-    state.obstacleTimer -= dt;
-    if (state.obstacleTimer <= 0) {
-      spawnObstacle();
-      // intensity ramps as timer counts down — last seconds get busier
-      const ramp = 1 - (state.haulTimer / HAUL_DURATION) * 0.55;
-      state.obstacleTimer = (OBSTACLE_MIN_INTERVAL + Math.random() * (OBSTACLE_MAX_INTERVAL - OBSTACLE_MIN_INTERVAL)) / ramp;
+    // spawn predators with ramping intensity
+    state.predatorTimer -= dt;
+    if (state.predatorTimer <= 0) {
+      spawnPredator();
+      const t01 = 1 - (state.haulTimer / HAUL_DURATION); // 0..1 over phase
+      const interval = PREDATOR_MAX_INTERVAL - (PREDATOR_MAX_INTERVAL - PREDATOR_MIN_INTERVAL) * t01;
+      state.predatorTimer = interval * (0.8 + Math.random() * 0.4);
     }
-    // move obstacles; they stay locked relative to the hook so screen Y is stable
-    for (const o of state.obstacles) {
-      o.x += o.vx * dt;
-      o.bobPhase += dt * 3;
-      o.y = state.hook.y + o.yOffsetFromHook + Math.sin(o.bobPhase) * 3;
-    }
-    state.obstacles = state.obstacles.filter(o => o.x > -180 && o.x < W + 180);
 
-    // collisions with obstacles
-    for (const o of state.obstacles) {
-      if (Math.abs(o.x - f.x) < (o.w + f.w) / 2 - 4 &&
-          Math.abs(o.y - f.y) < (o.h + f.h) / 2 - 4) {
-        f.curHp -= 32 * dt;
-        state.flash = 0.35;
+    // update predators
+    for (const p of state.predators) {
+      p.age += dt;
+      p.bobPhase += dt * 4;
+      if (p.state === 'approaching') {
+        const dx = f.x - p.x;
+        const dy = f.y - p.y;
+        const dist = Math.hypot(dx, dy);
+        const biteDist = Math.max(p.w, p.h) * 0.42 + 8;
+        if (dist < biteDist) {
+          // bite!
+          f.bitesLeft -= 1;
+          state.flash = 0.55;
+          p.state = 'fleeing';
+          p.vx = (dx > 0 ? -1 : 1) * 280;
+          p.vy = -120 - Math.random() * 80;
+          p.dir = p.vx > 0 ? 1 : -1;
+        } else {
+          p.x += (dx / dist) * p.speed * dt;
+          p.y += (dy / dist) * p.speed * dt;
+          p.dir = dx > 0 ? 1 : -1;
+        }
+      } else if (p.state === 'fleeing') {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 30 * dt; // slight settle
       }
     }
+    state.predators = state.predators.filter(p =>
+      p.age < 12 && p.x > -200 && p.x < W + 200 &&
+      p.y > state.cameraY - 200 && p.y < state.cameraY + H + 200
+    );
 
-    if (f.curHp <= 0) {
-      f.alive = false;
-      state.caught = null;
-      state.obstacles = [];
-      state.hookPhase = 'escaping';
-      flashMessage('Сорвалась!', '#ff6b6b');
+    // tap effects fade
+    for (const e of state.tapEffects) e.age += dt;
+    state.tapEffects = state.tapEffects.filter(e => e.age < 0.35);
+
+    if (f.bitesLeft <= 0) {
+      loseRound();
     } else if (state.haulTimer <= 0) {
+      // success → dramatic yank off-screen
+      state.hookPhase = 'yanking';
+      state.yankProgress = 0;
+      state.predators = [];
+      state.tapEffects = [];
+    }
+  } else if (state.hookPhase === 'yanking') {
+    state.yankProgress += dt;
+    // accelerating upward rip
+    const t = state.yankProgress / YANK_DURATION;
+    const speed = 600 + t * 1400;
+    state.hook.y -= speed * dt;
+    if (state.caught) {
+      state.caught.x = state.hook.x;
+      state.caught.y = state.hook.y + 14;
+    }
+    if (state.yankProgress >= YANK_DURATION) {
+      const f = state.caught;
       flashMessage('Поймали ' + f.type.name + '!', '#7bd680');
-      state.obstacles = [];
       startStage2(f.type);
     }
-  } else if (state.hookPhase === 'rising') {
-    state.hook.y -= RISE_SPEED * dt;
-    state.hookBaseX += horiz * HOOK_SPEED * dt;
-    state.hookBaseX = clamp(state.hookBaseX, 16, W - 16);
-    state.hook.x = state.hookBaseX;
-    if (state.hook.y <= surfaceWorldY() + 2) {
-      state.hookPhase = 'descending';
-      state.hook.y = surfaceWorldY() + 4;
-    }
-  } else if (state.hookPhase === 'escaping') {
-    state.hook.y -= RISE_SPEED * 1.6 * dt;
-    if (state.hook.y <= surfaceWorldY() + 2) {
-      state.hookPhase = 'descending';
-      state.hook.y = surfaceWorldY() + 4;
+  } else if (state.hookPhase === 'lost') {
+    state.lostTimer -= dt;
+    if (state.lostTimer <= 0) {
+      endRoundAfterLoss();
     }
   }
 
   // camera follows hook (keep hook around middle of screen when deep)
-  state.cameraY = Math.max(0, state.hook.y - H * 0.55);
+  // ...except during the final yank, where we freeze it so the fish dramatically rips off-screen
+  if (state.hookPhase !== 'yanking') {
+    state.cameraY = Math.max(0, state.hook.y - H * 0.55);
+  }
 
   spawnAhead();
   despawnFar();
@@ -806,28 +1084,66 @@ function render() {
     drawFish(f, sy, f === state.caught);
   }
 
-  // obstacles (during hauling)
-  for (const o of state.obstacles) {
-    const sy = o.y - camY;
+  // predators (during hauling)
+  for (const p of state.predators) {
+    const sy = p.y - camY;
     if (sy < -60 || sy > H + 60) continue;
-    drawFish(o, sy, false);
+    drawPredator(p, sy);
+  }
+
+  // tap feedback rings
+  for (const e of state.tapEffects) {
+    const sy = e.y - camY;
+    const t = e.age / 0.35;
+    const r = 10 + t * 38;
+    ctx.strokeStyle = e.hit
+      ? 'rgba(123,214,128,' + (1 - t) + ')'
+      : 'rgba(255,255,255,' + (0.5 * (1 - t)) + ')';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(e.x, sy, r, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   // hook
   drawHook(state.hook.x, hookScreenY);
 
-  // HP bar above caught
-  if (state.caught) {
-    const barW = 70, barH = 6;
-    const bx = clamp(state.hook.x - barW / 2, 4, W - barW - 4);
-    const by = hookScreenY - 30;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
-    ctx.fillStyle = '#2c2c2c';
-    ctx.fillRect(bx, by, barW, barH);
-    const hpFrac = Math.max(0, state.caught.curHp / state.caught.maxHp);
-    ctx.fillStyle = hpFrac > 0.5 ? '#4caf50' : hpFrac > 0.25 ? '#ffb300' : '#e53935';
-    ctx.fillRect(bx, by, barW * hpFrac, barH);
+  // bite pips above caught (one per remaining "укус")
+  if (state.caught && state.caught.maxBites) {
+    const max = state.caught.maxBites;
+    const left = state.caught.bitesLeft;
+    const pipR = 8;
+    const gap = 6;
+    const totalW = max * (pipR * 2) + (max - 1) * gap;
+    const startX = clamp(state.hook.x - totalW / 2 + pipR, pipR + 4, W - pipR - 4 - (totalW - pipR * 2));
+    const py = hookScreenY - 30;
+    for (let i = 0; i < max; i++) {
+      const x = startX + i * (pipR * 2 + gap);
+      ctx.beginPath();
+      ctx.arc(x, py, pipR, 0, Math.PI * 2);
+      if (i < left) {
+        ctx.fillStyle = '#ff4d4d';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // X mark
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x - pipR * 0.45, py - pipR * 0.45);
+        ctx.lineTo(x + pipR * 0.45, py + pipR * 0.45);
+        ctx.moveTo(x + pipR * 0.45, py - pipR * 0.45);
+        ctx.lineTo(x - pipR * 0.45, py + pipR * 0.45);
+        ctx.stroke();
+      }
+    }
   }
 
   // haul timer bar
@@ -916,6 +1232,86 @@ function drawFish(f, sy, highlight) {
   ctx.restore();
 }
 
+function drawPredator(p, sy) {
+  const type = p.type;
+  const shape = type.shape;
+  const cs = CELL_VISUAL_SIZE_STAGE1 * (p.scale || 1);
+  const rows = shape.length, cols = shape[0].length;
+  const fishW = cols * cs;
+  const fishH = rows * cs;
+
+  ctx.save();
+  ctx.translate(p.x, sy);
+  if (p.dir < 0) ctx.scale(-1, 1);
+
+  // tail
+  ctx.fillStyle = shadeColor(type.color, -20);
+  ctx.beginPath();
+  const tailX = -fishW / 2 - 7;
+  ctx.moveTo(tailX, -Math.min(8, fishH / 3));
+  ctx.lineTo(tailX, Math.min(8, fishH / 3));
+  ctx.lineTo(tailX + 8, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // body cells
+  ctx.fillStyle = type.color;
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 1;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (!shape[r][c]) continue;
+      const cx = -fishW / 2 + c * cs;
+      const cy = -fishH / 2 + r * cs;
+      roundRect(ctx, cx + 0.5, cy + 0.5, cs - 1, cs - 1, 3);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  // teeth on front cell
+  const frontC = cols - 1;
+  let frontR = 0;
+  for (let r = 0; r < rows; r++) if (shape[r][frontC]) { frontR = r; break; }
+  const mouthX = -fishW / 2 + (frontC + 1) * cs;
+  const mouthY = -fishH / 2 + frontR * cs + cs / 2;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.moveTo(mouthX - 4, mouthY - 4);
+  ctx.lineTo(mouthX - 1, mouthY - 1);
+  ctx.lineTo(mouthX - 4, mouthY + 1);
+  ctx.lineTo(mouthX - 1, mouthY + 3);
+  ctx.lineTo(mouthX - 4, mouthY + 5);
+  ctx.lineTo(mouthX - 7, mouthY + 6);
+  ctx.lineTo(mouthX - 7, mouthY - 4);
+  ctx.closePath();
+  ctx.fill();
+  // eye — red angry dot
+  const eyeX = -fishW / 2 + frontC * cs + cs * 0.62;
+  const eyeY = -fishH / 2 + frontR * cs + cs * 0.30;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(eyeX, eyeY, 2.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#c11';
+  ctx.beginPath();
+  ctx.arc(eyeX + 0.5, eyeY, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  // tap target ring (while approaching) — pulsing
+  if (p.state === 'approaching') {
+    const pulse = 0.7 + Math.sin(p.bobPhase * 2) * 0.3;
+    const r = Math.max(fishW, fishH) * 0.7 + 4;
+    ctx.strokeStyle = 'rgba(255,80,80,' + (0.55 * pulse) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, sy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
 function drawHook(x, y) {
   ctx.strokeStyle = '#d8d8d8';
   ctx.lineWidth = 2;
@@ -988,9 +1384,57 @@ function startStage2(caughtType) {
   state.stage = 'storage';
   const fishId = 'f' + (state.nextFishId++);
   state.heldFishes.push({ id: fishId, typeId: caughtType.id, rotation: 0 });
+
+  // rivals fished this round too — update their scores once per round
+  if (state.botsAppliedForRound < state.round) {
+    applyBotGains();
+    state.botsAppliedForRound = state.round;
+    state.lbRevealDeltas = true;
+  }
+
   document.getElementById('storage-view').classList.add('active');
   updateHud();
   renderStorage();
+  renderLeaderboard();
+  // Leaderboard stays collapsed — the player opens it via the 🏆 pill when they
+  // want. Deltas (+N) remain ready to show for this round once they open it.
+  showLeaderboard(false);
+}
+
+function leaderboardPillText() {
+  return { rank: playerRank() + '/6', score: String(computePlayerScore()) };
+}
+
+function refreshPill() {
+  const t = leaderboardPillText();
+  document.getElementById('lb-pill-rank').textContent = t.rank;
+  document.getElementById('lb-pill-score').textContent = t.score;
+}
+
+function showLeaderboard(expanded) {
+  state.lbExpanded = expanded;
+  document.getElementById('leaderboard').classList.toggle('expanded', expanded);
+}
+
+function renderLeaderboard() {
+  document.getElementById('lb-round').textContent = state.round;
+  const rows = document.getElementById('lb-rows');
+  rows.innerHTML = '';
+  const entries = getLeaderboardEntries();
+  entries.forEach((e, i) => {
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (e.isPlayer ? ' is-player' : '');
+    const showDelta = state.lbRevealDeltas && !e.isPlayer && e.lastGain !== undefined;
+    const deltaTxt = e.lastGain > 0 ? '+' + e.lastGain : (showDelta ? '+0' : '');
+    row.innerHTML =
+      '<span class="lb-rank">' + (i + 1) + '</span>' +
+      '<span class="lb-avatar">' + e.avatar + '</span>' +
+      '<span class="lb-name">' + e.name + '</span>' +
+      '<span class="lb-delta' + (e.lastGain > 0 ? '' : ' zero') + (showDelta ? ' show' : '') + '">' + deltaTxt + '</span>' +
+      '<span class="lb-score">' + e.score + '</span>';
+    rows.appendChild(row);
+  });
+  refreshPill();
 }
 
 function renderStorage() {
@@ -1030,6 +1474,8 @@ function renderStorage() {
     holding.appendChild(wrap);
   }
   updateNextButton();
+  // player's score/rank is live — reflect placement changes immediately
+  if (typeof renderLeaderboard === 'function') renderLeaderboard();
 }
 
 function buildFishPiece(fishId, typeId, rotation) {
@@ -1333,6 +1779,34 @@ function updateNextButton() {
   btn.classList.toggle('warn', heldCount > 0);
 }
 
+function loseRound() {
+  // rivals still fished this round — keep the leaderboard moving
+  if (state.botsAppliedForRound < state.round) {
+    applyBotGains();
+    state.botsAppliedForRound = state.round;
+  }
+  if (state.caught) state.caught.alive = false;
+  state.caught = null;
+  state.predators = [];
+  state.tapEffects = [];
+  state.hookPhase = 'lost';
+  state.lostTimer = 1.6;
+  flashMessage('Сорвалась! Раунд проигран', '#ff6b6b');
+}
+
+function endRoundAfterLoss() {
+  if (state.round >= MAX_ROUNDS) {
+    state.paused = true;
+    endGame();
+    return;
+  }
+  state.round++;
+  document.getElementById('hud-round').textContent = 'Раунд ' + state.round + '/' + MAX_ROUNDS;
+  state.heldFishes = [];
+  state.stage = 'fishing';
+  initStage1();
+}
+
 function nextRound() {
   state.heldFishes = [];
   if (state.round >= MAX_ROUNDS) {
@@ -1342,32 +1816,36 @@ function nextRound() {
   state.round++;
   document.getElementById('storage-view').classList.remove('active');
   document.querySelectorAll('.fish-piece').forEach(p => p.remove());
+  clearTimeout(startStage2._t);
+  showLeaderboard(false);
   document.getElementById('hud-round').textContent = 'Раунд ' + state.round + '/' + MAX_ROUNDS;
   state.stage = 'fishing';
   initStage1();
 }
 
 function endGame() {
-  const placedIds = Object.keys(state.placedFish);
-  let cells = 0;
-  const counts = {};
-  for (const fid of placedIds) {
-    const p = state.placedFish[fid];
-    const t = getTypeById(p.typeId);
-    cells += t.shape.flat().filter(Boolean).length;
-    counts[t.name] = (counts[t.name] || 0) + 1;
-  }
-  const score = cells * 10 + placedIds.length * 5;
-  let breakdown = Object.entries(counts).map(([n, c]) => n + ' ×' + c).join(', ');
-  if (!breakdown) breakdown = 'улов отсутствует';
+  const entries = getLeaderboardEntries();
+  const rank = entries.findIndex(e => e.isPlayer) + 1;
+  const score = computePlayerScore();
+
+  let standings = entries.map((e, i) => {
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+    return '<div style="display:flex;gap:8px;align-items:center;padding:4px 10px;border-radius:8px;font-size:14px;' +
+      (e.isPlayer ? 'background:rgba(98,196,98,0.22);font-weight:700;' : '') + '">' +
+      '<span style="width:24px;text-align:center;">' + medal + '</span>' +
+      '<span style="font-size:15px;">' + e.avatar + '</span>' +
+      '<span style="flex:1;text-align:left;">' + e.name + '</span>' +
+      '<span style="font-variant-numeric:tabular-nums;">' + e.score + '</span></div>';
+  }).join('');
+
+  const title = rank === 1 ? '🏆 Победа!' : rank <= 3 ? 'Призовое место!' : 'Конец рейса';
 
   document.getElementById('storage-view').classList.remove('active');
-  document.getElementById('overlay-title').textContent = 'Конец рейса!';
+  clearTimeout(startStage2._t);
+  document.getElementById('overlay-title').textContent = title;
   document.getElementById('overlay-text').innerHTML =
-    'Доставлено рыб: <b>' + placedIds.length + '</b><br>' +
-    'Заполнено ячеек: <b>' + cells + '/' + GRID_CELLS + '</b><br>' +
-    'Очки: <b>' + score + '</b><br><br>' +
-    '<span style="opacity:0.8;font-size:13px;">' + breakdown + '</span>';
+    '<div style="font-size:14px;opacity:0.85;margin-bottom:10px;">Ваше место: <b>' + rank + ' из 6</b> · <b>' + score + '</b> очков</div>' +
+    '<div style="display:flex;flex-direction:column;gap:3px;width:min(300px,80vw);margin:0 auto;">' + standings + '</div>';
   document.getElementById('overlay').classList.add('active');
 }
 
@@ -1393,24 +1871,18 @@ function bindHoldBtn(btn, key) {
 bindHoldBtn(document.getElementById('btn-left'), 'inputLeft');
 bindHoldBtn(document.getElementById('btn-right'), 'inputRight');
 
-document.getElementById('btn-up').addEventListener('pointerdown', (e) => {
-  e.preventDefault();
+canvas.addEventListener('pointerdown', (e) => {
   if (!state || state.stage !== 'fishing') return;
-  if (state.hookPhase === 'descending') {
-    state.hookPhase = 'rising';
-    flashMessage('Поднимаем', '#7bd680');
-  }
+  if (state.hookPhase !== 'hauling') return;
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  tryTapPredator(e.clientX - rect.left, e.clientY - rect.top);
 });
 
 window.addEventListener('keydown', (e) => {
   if (!state) return;
   if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.inputLeft = true;
   if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.inputRight = true;
-  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') {
-    if (state.stage === 'fishing' && state.hookPhase === 'descending') {
-      state.hookPhase = 'rising';
-    }
-  }
 });
 window.addEventListener('keyup', (e) => {
   if (!state) return;
@@ -1420,6 +1892,10 @@ window.addEventListener('keyup', (e) => {
 
 document.getElementById('next-round-btn').addEventListener('click', nextRound);
 document.getElementById('restart-btn').addEventListener('click', restartGame);
+document.getElementById('lb-pill').addEventListener('click', () => {
+  if (!state) return;
+  showLeaderboard(!state.lbExpanded);
+});
 
 document.getElementById('start-btn').addEventListener('click', () => {
   document.getElementById('start-screen').classList.add('hidden');
