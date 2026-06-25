@@ -238,6 +238,37 @@ html, body {
 .cell.hint-valid { background: rgba(80, 220, 130, 0.5); box-shadow: inset 0 0 0 1px rgba(80,220,130,0.9); }
 .cell.hint-invalid { background: rgba(220, 80, 80, 0.45); box-shadow: inset 0 0 0 1px rgba(220,80,80,0.9); }
 
+.line-glow {
+  position: absolute;
+  border-radius: 6px;
+  background: rgba(255, 216, 107, 0.22);
+  box-shadow: 0 0 16px rgba(255,216,107,0.75), inset 0 0 0 2px rgba(255,216,107,0.85);
+  pointer-events: none;
+  z-index: 60;
+  animation: linePulse 1.1s ease-in-out infinite;
+}
+@keyframes linePulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+#line-toast {
+  position: absolute;
+  top: 96px;
+  left: 50%;
+  transform: translate(-50%, -8px) scale(0.9);
+  background: linear-gradient(180deg, #ffd86b, #e8a33b);
+  color: #4a2c00;
+  font-weight: 800;
+  font-size: 15px;
+  padding: 9px 18px;
+  border-radius: 18px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.18,0.9,0.32,1.4);
+}
+#line-toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+
 .fish-piece {
   position: absolute;
   z-index: 5;
@@ -419,7 +450,8 @@ html, body {
     <div id="storage-view">
       <button id="lb-pill">🏆 <span id="lb-pill-rank">1/6</span> · <span id="lb-pill-score">0</span></button>
       <div class="storage-title">Склад судна</div>
-      <div class="storage-subtitle">Тащите рыбу · <b>тап</b> по рыбе — поворот</div>
+      <div class="storage-subtitle">Тащите рыбу · <b>тап</b> по рыбе — поворот · собирайте <b>ряды</b></div>
+      <div id="line-toast"></div>
       <div id="leaderboard">
         <div class="lb-head">🏆 Лидерборд · раунд <span id="lb-round">1</span></div>
         <div id="lb-rows"></div>
@@ -445,9 +477,9 @@ html, body {
       <div class="subtitle">прототип · 5 раундов</div>
       <div class="rules">
         <b>1.</b> Опускайте крючок (◀ ▶ или A/D), пока не зацепите рыбу.<br>
-        <b>2.</b> Глубина бесконечная — чем глубже, тем больше рыбы.<br>
+        <b>2.</b> Глубина до 300м — чем глубже, тем крупнее и редче рыба. Упрётесь в дно без улова — раунд проигран.<br>
         <b>3.</b> Поймали — 10 секунд тащим. Со всех сторон лезут хищники — <b>тапайте</b> по ним. Каждый укус = -1 шкала. Если все шкалы сгорят — рыба сорвётся и <b>раунд проигран</b>. На глубине хищники крупнее, шкал меньше (4→3→2).<br>
-        <b>4.</b> На складе 5×5: <b>тащите</b> в ячейки, <b>тапайте</b> для поворота. Соревнуйтесь с 5 соперниками за место в топе!
+        <b>4.</b> На складе 5×5: <b>тащите</b> в ячейки, <b>тапайте</b> для поворота. Заполните ряд или столбец целиком — <b>бонус +50</b>! Соревнуйтесь с 5 соперниками за топ.
       </div>
       <button class="btn-primary" id="start-btn">Начать ловлю</button>
     </div>
@@ -456,21 +488,28 @@ html, body {
 <script>
 // =================== Game ===================
 const FISH_TYPES = [
-  // shallow / common
-  { id: 'sardine',  name: 'Сардина',  color: '#c8d5e6', shape: [[1,1]],              hp: 25,  wiggleAmp: 30, wiggleFreq: 0.10, minDepth: 0,   weight: 6.0 },
-  { id: 'mackerel', name: 'Скумбрия', color: '#7bc8ff', shape: [[1,1,1]],            hp: 45,  wiggleAmp: 45, wiggleFreq: 0.06, minDepth: 0,   weight: 5.0 },
-  { id: 'pike',     name: 'Щука',     color: '#6b9c46', shape: [[1],[1],[1]],        hp: 60,  wiggleAmp: 35, wiggleFreq: 0.09, minDepth: 5,   weight: 4.0 },
-  // mid
-  { id: 'crab',     name: 'Краб',     color: '#d65a31', shape: [[1,1],[1,0]],        hp: 55,  wiggleAmp: 25, wiggleFreq: 0.13, minDepth: 15,  weight: 3.5 },
-  { id: 'octopus',  name: 'Осьминог', color: '#a040a0', shape: [[1,1,1],[0,1,0]],    hp: 75,  wiggleAmp: 55, wiggleFreq: 0.07, minDepth: 30,  weight: 3.0 },
-  { id: 'tuna',     name: 'Тунец',    color: '#3d7fb8', shape: [[1,1],[1,1]],        hp: 90,  wiggleAmp: 50, wiggleFreq: 0.10, minDepth: 50,  weight: 2.5 },
-  { id: 'eel',      name: 'Угорь',    color: '#5a4a3a', shape: [[1],[1],[1],[1]],    hp: 70,  wiggleAmp: 75, wiggleFreq: 0.14, minDepth: 70,  weight: 2.0 },
-  // deep — rarer, bigger
-  { id: 'squid',    name: 'Кальмар',  color: '#d8567a', shape: [[1,1,1],[1,0,1]],    hp: 100, wiggleAmp: 65, wiggleFreq: 0.08, minDepth: 100, weight: 1.8 },
-  { id: 'shark',    name: 'Акула',    color: '#5d6e80', shape: [[1,1,1,1]],          hp: 140, wiggleAmp: 90, wiggleFreq: 0.05, minDepth: 140, weight: 1.2 },
-  { id: 'manta',    name: 'Манта',    color: '#384858', shape: [[1,1,1],[1,1,1]],    hp: 170, wiggleAmp: 75, wiggleFreq: 0.06, minDepth: 200, weight: 0.9 },
-  { id: 'angler',   name: 'Удильщик', color: '#2c1a3a', shape: [[1,1],[1,1],[0,1]],  hp: 130, wiggleAmp: 60, wiggleFreq: 0.11, minDepth: 260, weight: 0.7 },
-  { id: 'whale',    name: 'Кашалот',  color: '#2a3a4e', shape: [[1,1,1,1],[1,1,1,1]],hp: 260, wiggleAmp: 110,wiggleFreq: 0.04, minDepth: 350, weight: 0.5 },
+  // surface (0–25м) — мелочь, простые формы
+  { id: 'fry',      name: 'Малёк',        color: '#dfe9f5', shape: [[1]],                       wiggleFreq: 0.16, minDepth: 0,   weight: 6.0 },
+  { id: 'sardine',  name: 'Сардина',      color: '#c8d5e6', shape: [[1,1]],                     wiggleFreq: 0.10, minDepth: 0,   weight: 5.5 },
+  { id: 'sprat',    name: 'Килька',       color: '#9fb8cf', shape: [[1],[1]],                   wiggleFreq: 0.12, minDepth: 6,   weight: 5.0 },
+  { id: 'mackerel', name: 'Скумбрия',     color: '#7bc8ff', shape: [[1,1,1]],                   wiggleFreq: 0.07, minDepth: 15,  weight: 4.5 },
+  // shallow-mid (25–95м) — тромино/тетромино
+  { id: 'pike',     name: 'Щука',         color: '#6b9c46', shape: [[1],[1],[1]],               wiggleFreq: 0.09, minDepth: 25,  weight: 4.0 },
+  { id: 'crab',     name: 'Краб',         color: '#d65a31', shape: [[1,1],[1,0]],               wiggleFreq: 0.13, minDepth: 38,  weight: 3.6 },
+  { id: 'perch',    name: 'Окунь',        color: '#e0a32e', shape: [[0,1,1],[1,1,0]],           wiggleFreq: 0.10, minDepth: 52,  weight: 3.2 },
+  { id: 'flounder', name: 'Камбала',      color: '#b58b5a', shape: [[1,1],[1,1]],               wiggleFreq: 0.08, minDepth: 66,  weight: 2.9 },
+  { id: 'octopus',  name: 'Осьминог',     color: '#a040a0', shape: [[1,1,1],[0,1,0]],           wiggleFreq: 0.07, minDepth: 80,  weight: 2.6 },
+  // mid (95–172м)
+  { id: 'seahorse', name: 'Морской конёк',color: '#46b39d', shape: [[0,1],[0,1],[1,1]],         wiggleFreq: 0.12, minDepth: 95,  weight: 2.3 },
+  { id: 'lobster',  name: 'Лангуст',      color: '#c0392b', shape: [[1,1,0],[0,1,1]],           wiggleFreq: 0.11, minDepth: 112, weight: 2.0 },
+  { id: 'squid',    name: 'Кальмар',      color: '#d8567a', shape: [[1,1,1],[1,0,1]],           wiggleFreq: 0.08, minDepth: 130, weight: 1.7 },
+  { id: 'eel',      name: 'Угорь',        color: '#5a4a3a', shape: [[1],[1],[1],[1]],           wiggleFreq: 0.14, minDepth: 150, weight: 1.5 },
+  // deep (172–260м) — крупные, редкие
+  { id: 'ray',      name: 'Скат',         color: '#384858', shape: [[1,1,1],[1,1,1]],           wiggleFreq: 0.06, minDepth: 172, weight: 1.2 },
+  { id: 'shark',    name: 'Акула',        color: '#5d6e80', shape: [[1,1,1,1]],                 wiggleFreq: 0.05, minDepth: 195, weight: 1.0 },
+  { id: 'starfish', name: 'Морская звезда',color:'#e8743b', shape: [[0,1,0],[1,1,1],[0,1,0]],   wiggleFreq: 0.09, minDepth: 218, weight: 0.85 },
+  { id: 'angler',   name: 'Удильщик',     color: '#7a3f8c', shape: [[1,1],[1,1],[0,1]],         wiggleFreq: 0.11, minDepth: 240, weight: 0.7 },
+  { id: 'whale',    name: 'Кашалот',      color: '#2a3a4e', shape: [[1,1,1,1],[1,1,1,1]],       wiggleFreq: 0.04, minDepth: 260, weight: 0.55 },
 ];
 
 const CELL_VISUAL_SIZE_STAGE1 = 18;
@@ -479,8 +518,10 @@ const WATER_SURFACE_FRAC = 0.13;
 const DESCENT_SPEED = 140;
 const HOOK_SPEED = 230;
 const DEPTH_PX_PER_M = 20; // 20 px = 1 m
+const MAX_DEPTH_M = 300;   // hard sea floor
 const GRID_SIZE = 5;
 const GRID_CELLS = GRID_SIZE * GRID_SIZE;
+const LINE_BONUS = 50; // points per fully-filled row or column on the deck
 const HAUL_DURATION = 10;
 const PREDATOR_MIN_INTERVAL = 0.55;
 const PREDATOR_MAX_INTERVAL = 1.3;
@@ -514,61 +555,124 @@ const BOT_PROFILES = [
 function fishCells(type) { return type.shape.flat().filter(Boolean).length; }
 function fishValue(type) { return fishCells(type) * 10 + 5; }
 
+// Count fully-filled lines (rows + columns) in a 5×5 occupancy grid.
+function countLines(occ) {
+  let lines = 0;
+  for (let y = 0; y < GRID_SIZE; y++) {
+    let full = true;
+    for (let x = 0; x < GRID_SIZE; x++) if (!occ[y * GRID_SIZE + x]) { full = false; break; }
+    if (full) lines++;
+  }
+  for (let x = 0; x < GRID_SIZE; x++) {
+    let full = true;
+    for (let y = 0; y < GRID_SIZE; y++) if (!occ[y * GRID_SIZE + x]) { full = false; break; }
+    if (full) lines++;
+  }
+  return lines;
+}
+
+function playerOccupancy() {
+  const occ = new Array(GRID_CELLS).fill(0);
+  for (const fid in state.placedFish) {
+    const p = state.placedFish[fid];
+    const sh = getRotatedShape(getTypeById(p.typeId).shape, p.rotation || 0);
+    for (let r = 0; r < sh.length; r++) {
+      for (let c = 0; c < sh[r].length; c++) {
+        if (!sh[r][c]) continue;
+        const x = p.originX + c, y = p.originY + r;
+        if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) occ[y * GRID_SIZE + x] = 1;
+      }
+    }
+  }
+  return occ;
+}
+
 function computePlayerScore() {
   let cells = 0, count = 0;
   for (const fid in state.placedFish) {
     cells += fishCells(getTypeById(state.placedFish[fid].typeId));
     count++;
   }
-  return cells * 10 + count * 5;
+  return cells * 10 + count * 5 + countLines(playerOccupancy()) * LINE_BONUS;
 }
 
-// Sample a plausible per-round catch value, derived from real fish values.
-// Later rounds skew toward bigger (deeper) fish, mirroring the player's options.
-function sampleRoundFishValue(round) {
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+// Which real fish a bot catches this round — personality biases the size, and the
+// round caps how deep the bot fished (so only reachable types). Returns a FISH_TYPE
+// or null if the bot came up empty this round (escaped / hit the floor).
+function botCatchType(bot, round, playerScore) {
   const depthBias = (round - 1) / Math.max(1, MAX_ROUNDS - 1); // 0..1
-  const weighted = FISH_TYPES.map(t => {
-    const cells = fishCells(t);
-    const w = (1 - depthBias) * (1.6 / cells) + depthBias * (cells / 8) + 0.05;
-    return { v: fishValue(t), w };
-  });
-  const total = weighted.reduce((s, e) => s + e.w, 0);
-  let r = Math.random() * total;
-  for (const e of weighted) { r -= e.w; if (r <= 0) return e.v; }
-  return weighted[weighted.length - 1].v;
-}
 
-// One round's score gain for a bot — personality + believable variance + occasional "сорвалась".
-function botRoundGain(bot, round, playerTotal) {
-  const depthBias = (round - 1) / Math.max(1, MAX_ROUNDS - 1);
-  let v = sampleRoundFishValue(round);
+  // occasional empty round (more likely the deeper they push)
+  if (Math.random() < 0.06 + depthBias * 0.12) return null;
 
-  // occasionally the bot "loses" the fish to predators (more likely deeper)
-  const loseChance = 0.07 + depthBias * 0.13;
-  if (Math.random() < loseChance) {
-    return Math.round(v * Math.random() * 0.25); // mostly nothing
-  }
-
+  // target fish size, 0 (smallest) .. 1 (biggest), per personality
+  let target;
   switch (bot.personality) {
-    case 'steady':      v *= 0.95 + Math.random() * 0.12; break;        // consistent, slightly above avg
-    case 'lucky':       v *= Math.random() < 0.5 ? 0.45 + Math.random() * 0.2 : 1.5 + Math.random() * 0.4; break; // boom or bust
-    case 'slowstart':   v *= 0.55 + depthBias * 1.0 + Math.random() * 0.15; break;  // weak early, strong late
-    case 'frontrunner': v *= 1.45 - depthBias * 0.85 + Math.random() * 0.15; break; // strong early, fades
-    case 'catchup': {                                                   // rubber-bands toward the player
-      const behind = playerTotal - bot.score;
-      const boost = behind > 0 ? Math.min(0.65, behind / 320) : -0.1;
-      v *= 1 + boost + (Math.random() - 0.5) * 0.2;
+    case 'steady':      target = 0.45 + (Math.random() - 0.5) * 0.25; break;        // dependable mediums
+    case 'lucky':       target = Math.random(); break;                              // anything goes
+    case 'slowstart':   target = 0.12 + depthBias * 0.85 + (Math.random() - 0.5) * 0.2; break; // small→big
+    case 'frontrunner': target = 0.88 - depthBias * 0.7 + (Math.random() - 0.5) * 0.2; break;  // big→small
+    case 'catchup': {                                                               // chase the player
+      const behind = playerScore - bot.score;
+      target = clamp01(0.4 + behind / 400) + (Math.random() - 0.5) * 0.2;
       break;
     }
+    default: target = Math.random();
   }
-  return Math.max(0, Math.round(v));
+  target = clamp01(target);
+
+  // only types the bot could reach this round
+  const maxDepthM = Math.min(MAX_DEPTH_M, 45 + round * 55);
+  const eligible = FISH_TYPES.filter(t => (t.minDepth || 0) <= maxDepthM)
+                             .sort((a, b) => fishCells(a) - fishCells(b));
+  const idx = Math.round(target * (eligible.length - 1));
+  return eligible[idx];
+}
+
+// Try to place a shape into a bot's 5×5 grid (any rotation, greedy top-left pack).
+function botTryPlace(bot, type) {
+  for (let rot = 0; rot < 4; rot++) {
+    const shape = getRotatedShape(type.shape, rot);
+    const rows = shape.length, cols = shape[0].length;
+    for (let oy = 0; oy <= GRID_SIZE - rows; oy++) {
+      for (let ox = 0; ox <= GRID_SIZE - cols; ox++) {
+        let fits = true;
+        for (let r = 0; r < rows && fits; r++) {
+          for (let c = 0; c < cols && fits; c++) {
+            if (shape[r][c] && bot.occ[(oy + r) * GRID_SIZE + (ox + c)]) fits = false;
+          }
+        }
+        if (!fits) continue;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (shape[r][c]) bot.occ[(oy + r) * GRID_SIZE + (ox + c)] = 1;
+          }
+        }
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function applyBotGains() {
-  const playerTotal = computePlayerScore();
+  const playerScore = computePlayerScore();
   for (const bot of state.bots) {
-    bot.lastGain = botRoundGain(bot, state.round, playerTotal);
-    bot.score += bot.lastGain;
+    const before = bot.score;
+    const type = botCatchType(bot, state.round, playerScore);
+    let placed = false;
+    // value only counts if the fish is real AND actually fits on the bot's deck
+    if (type && botTryPlace(bot, type)) {
+      bot.cells += fishCells(type);
+      bot.placedCount += 1;
+      placed = true;
+    }
+    // total includes the same row/column bonus the player gets
+    bot.score = bot.cells * 10 + bot.placedCount * 5 + countLines(bot.occ) * LINE_BONUS;
+    bot.lastGain = bot.score - before;          // fish value + any line bonus earned this round
+    bot.lastFish = placed ? type.name : (type ? type.name + ' (не влезла)' : null);
   }
 }
 
@@ -634,13 +738,15 @@ function newGameState() {
     yankProgress: 0,
     lostTimer: 0,
     tapEffects: [],
-    bots: BOT_PROFILES.map(b => ({ id: b.id, name: b.name, avatar: b.avatar, personality: b.personality, score: 0 })),
+    bots: BOT_PROFILES.map(b => ({ id: b.id, name: b.name, avatar: b.avatar, personality: b.personality, score: 0, occ: new Array(GRID_CELLS).fill(0), cells: 0, placedCount: 0 })),
     botsAppliedForRound: 0,
     lbExpanded: false,
+    prevLineCount: 0,
   };
 }
 
 function surfaceWorldY() { return H * WATER_SURFACE_FRAC; }
+function bottomWorldY() { return surfaceWorldY() + MAX_DEPTH_M * DEPTH_PX_PER_M; }
 
 function initStage1() {
   state.hook = { x: W / 2, y: surfaceWorldY() + 4 };
@@ -650,22 +756,17 @@ function initStage1() {
   state.fishes = [];
   state.bubbles = [];
   state.cameraY = 0;
-  // Fish-free zone near the surface: the camera only starts following (and the
-  // boat scrolls off the top) once the hook passes ~0.55*H. Keep the first fish
-  // below that, so no catch — and no off-screen yank — happens while the boat is
-  // still visible (otherwise the hook can rip up past the boat).
-  state.lowestSpawnedY = surfaceWorldY() + H * 0.55 + 30;
   state.flash = 0;
   state.predators = [];
   state.predatorTimer = 0;
   state.haulTimer = 0;
   state.yankProgress = 0;
   state.tapEffects = [];
-  spawnAhead();
-  for (let i = 0; i < 22; i++) {
+  populateDive();
+  for (let i = 0; i < 26; i++) {
     state.bubbles.push({
       x: Math.random() * W,
-      y: state.cameraY + Math.random() * H + 30,
+      y: surfaceWorldY() + Math.random() * (bottomWorldY() - surfaceWorldY()),
       r: 1 + Math.random() * 2.5,
       vy: -8 - Math.random() * 16,
     });
@@ -673,13 +774,30 @@ function initStage1() {
   updateHud();
 }
 
-function spawnAhead() {
-  while (state.lowestSpawnedY < state.cameraY + H + 300) {
-    state.lowestSpawnedY += 55 + Math.random() * 50;
-    const layerN = 1 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < layerN; i++) {
-      spawnFish(state.lowestSpawnedY + (Math.random() - 0.5) * 30);
-    }
+// Build the whole 0–300м water column at once. Every fish type is GUARANTEED to
+// appear once (at a depth >= its minDepth), then random filler is layered in.
+function populateDive() {
+  state.fishes = [];
+  const surfaceY = surfaceWorldY();
+  // Fish-free zone near the surface: camera only follows (boat scrolls off the
+  // top) once the hook passes ~0.55*H. No fish above that, so no catch — and no
+  // off-screen yank — happens while the boat is still visible.
+  const topY = surfaceY + H * 0.55 + 30;
+  const bottomY = bottomWorldY() - 70; // keep clear of the floor
+
+  // 1) guaranteed one of each type
+  for (const type of FISH_TYPES) {
+    const minY = Math.max(topY, surfaceY + (type.minDepth || 0) * DEPTH_PX_PER_M);
+    if (minY >= bottomY) { spawnFish(bottomY, type); continue; }
+    const y = minY + Math.random() * (bottomY - minY) * 0.7;
+    spawnFish(y, type);
+  }
+
+  // 2) random filler across the column (depth-weighted)
+  const filler = 30;
+  for (let i = 0; i < filler; i++) {
+    const y = topY + Math.random() * (bottomY - topY);
+    spawnFish(y);
   }
 }
 
@@ -699,9 +817,9 @@ function pickFishType(depthM) {
   return weighted[weighted.length - 1].t;
 }
 
-function spawnFish(y) {
+function spawnFish(y, forcedType) {
   const depthM = Math.max(0, (y - surfaceWorldY()) / DEPTH_PX_PER_M);
-  const type = pickFishType(depthM);
+  const type = forcedType || pickFishType(depthM);
   const dir = Math.random() < 0.5 ? -1 : 1;
   const fishW = type.shape[0].length * CELL_VISUAL_SIZE_STAGE1;
   const fishH = type.shape.length * CELL_VISUAL_SIZE_STAGE1;
@@ -715,12 +833,6 @@ function spawnFish(y) {
     w: fishW, h: fishH,
     alive: true,
   });
-}
-
-function despawnFar() {
-  state.fishes = state.fishes.filter(f =>
-    f === state.caught || (f.alive && f.y > state.cameraY - 200)
-  );
 }
 
 function spawnPredator() {
@@ -866,6 +978,12 @@ function update(dt) {
         break;
       }
     }
+
+    // hit the sea floor without a catch → round lost
+    if (!state.caught && state.hook.y >= bottomWorldY()) {
+      state.hook.y = bottomWorldY();
+      loseRound('Дно! Рыба не поймана');
+    }
   } else if (state.hookPhase === 'hauling') {
     state.haulTimer -= dt;
     // hook stays put at catch depth — player focuses on defending
@@ -925,7 +1043,7 @@ function update(dt) {
     state.tapEffects = state.tapEffects.filter(e => e.age < 0.35);
 
     if (f.bitesLeft <= 0) {
-      loseRound();
+      loseRound('Сорвалась! Раунд проигран');
     } else if (state.haulTimer <= 0) {
       // success → dramatic yank off-screen
       state.hookPhase = 'yanking';
@@ -955,14 +1073,13 @@ function update(dt) {
     }
   }
 
-  // camera follows hook (keep hook around middle of screen when deep)
-  // ...except during the final yank, where we freeze it so the fish dramatically rips off-screen
+  // camera follows hook (keep hook around middle of screen when deep), clamped so
+  // it never scrolls past the sea floor. Frozen during the final yank.
   if (state.hookPhase !== 'yanking') {
-    state.cameraY = Math.max(0, state.hook.y - H * 0.55);
+    // +110 so the seabed stays visible when the hook reaches the floor
+    const camMax = Math.max(0, bottomWorldY() - H + 110);
+    state.cameraY = clamp(state.hook.y - H * 0.55, 0, camMax);
   }
-
-  spawnAhead();
-  despawnFar();
 
   if (state.flash > 0) state.flash -= dt;
   updateHud();
@@ -974,10 +1091,10 @@ function render() {
   const camY = state.cameraY;
   const surfaceScreen = surfaceWorld - camY;
 
-  // depth markers (faint lines + labels every 20m)
+  // depth markers (faint lines + labels every 20m), up to the floor
   ctx.textAlign = 'left';
   ctx.font = '10px -apple-system, sans-serif';
-  for (let depth = 10; depth < 50000; depth += 10) {
+  for (let depth = 10; depth <= MAX_DEPTH_M; depth += 10) {
     const worldY = surfaceWorld + depth * DEPTH_PX_PER_M;
     const sy = worldY - camY;
     if (sy < -10) continue;
@@ -1054,6 +1171,41 @@ function render() {
     ctx.beginPath();
     ctx.arc(b.x, sy, b.r, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // sea floor at MAX_DEPTH
+  const floorScreenY = bottomWorldY() - camY;
+  if (floorScreenY < H + 20) {
+    const fy = Math.max(-2, floorScreenY);
+    const grad = ctx.createLinearGradient(0, floorScreenY - 40, 0, floorScreenY + 30);
+    grad.addColorStop(0, 'rgba(20,28,22,0)');
+    grad.addColorStop(1, 'rgba(58,52,34,1)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, floorScreenY - 40, W, 70);
+    ctx.fillStyle = '#3a3422';
+    ctx.fillRect(0, floorScreenY, W, H - floorScreenY + 20);
+    // sand mounds
+    ctx.fillStyle = '#4a4230';
+    ctx.beginPath();
+    ctx.moveTo(0, floorScreenY + 6);
+    for (let x = 0; x <= W; x += 40) {
+      ctx.quadraticCurveTo(x + 20, floorScreenY - 6, x + 40, floorScreenY + 6);
+    }
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+    ctx.fill();
+    // a few rocks
+    ctx.fillStyle = '#2c2a22';
+    for (let i = 0; i < 5; i++) {
+      const rx = (i * 97 + 30) % W;
+      const rr = 8 + (i % 3) * 5;
+      ctx.beginPath();
+      ctx.ellipse(rx, floorScreenY + 4, rr, rr * 0.6, 0, Math.PI, 0, true);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('— ДНО ' + MAX_DEPTH_M + 'м —', W / 2, floorScreenY - 10);
   }
 
   // fishing line
@@ -1454,6 +1606,7 @@ function renderStorage() {
       positionPieceOnGrid(piece, p.originX, p.originY, p.rotation || 0, grid);
       grid.appendChild(piece);
     }
+    highlightCompletedLines(grid);
   });
 
   const holding = document.getElementById('holding-area');
@@ -1474,8 +1627,50 @@ function renderStorage() {
     holding.appendChild(wrap);
   }
   updateNextButton();
+  // row/column bonus: celebrate newly-completed lines
+  const lines = countLines(playerOccupancy());
+  if (lines > (state.prevLineCount || 0)) {
+    const newOnes = lines - state.prevLineCount;
+    showLineToast('🎉 Ряд собран! +' + (newOnes * LINE_BONUS));
+  }
+  state.prevLineCount = lines;
   // player's score/rank is live — reflect placement changes immediately
   if (typeof renderLeaderboard === 'function') renderLeaderboard();
+}
+
+function highlightCompletedLines(grid) {
+  grid.querySelectorAll('.line-glow').forEach(e => e.remove());
+  const cells = grid.querySelectorAll('.cell');
+  if (cells.length < GRID_CELLS) return;
+  const occ = playerOccupancy();
+  const addGlow = (cellA, cellB) => {
+    const g = document.createElement('div');
+    g.className = 'line-glow';
+    g.style.left = cellA.offsetLeft + 'px';
+    g.style.top = cellA.offsetTop + 'px';
+    g.style.width = (cellB.offsetLeft + cellB.offsetWidth - cellA.offsetLeft) + 'px';
+    g.style.height = (cellB.offsetTop + cellB.offsetHeight - cellA.offsetTop) + 'px';
+    grid.appendChild(g);
+  };
+  for (let y = 0; y < GRID_SIZE; y++) {
+    let full = true;
+    for (let x = 0; x < GRID_SIZE; x++) if (!occ[y * GRID_SIZE + x]) { full = false; break; }
+    if (full) addGlow(cells[y * GRID_SIZE], cells[y * GRID_SIZE + GRID_SIZE - 1]);
+  }
+  for (let x = 0; x < GRID_SIZE; x++) {
+    let full = true;
+    for (let y = 0; y < GRID_SIZE; y++) if (!occ[y * GRID_SIZE + x]) { full = false; break; }
+    if (full) addGlow(cells[x], cells[(GRID_SIZE - 1) * GRID_SIZE + x]);
+  }
+}
+
+function showLineToast(text) {
+  const t = document.getElementById('line-toast');
+  if (!t) return;
+  t.textContent = text;
+  t.classList.add('show');
+  clearTimeout(showLineToast._t);
+  showLineToast._t = setTimeout(() => t.classList.remove('show'), 1600);
 }
 
 function buildFishPiece(fishId, typeId, rotation) {
@@ -1779,7 +1974,7 @@ function updateNextButton() {
   btn.classList.toggle('warn', heldCount > 0);
 }
 
-function loseRound() {
+function loseRound(msg) {
   // rivals still fished this round — keep the leaderboard moving
   if (state.botsAppliedForRound < state.round) {
     applyBotGains();
@@ -1791,7 +1986,7 @@ function loseRound() {
   state.tapEffects = [];
   state.hookPhase = 'lost';
   state.lostTimer = 1.6;
-  flashMessage('Сорвалась! Раунд проигран', '#ff6b6b');
+  flashMessage(msg || 'Сорвалась! Раунд проигран', '#ff6b6b');
 }
 
 function endRoundAfterLoss() {
